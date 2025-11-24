@@ -2,6 +2,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const log = document.getElementById("log");
   let lastSeparator = null;
 
+  // Track MISS TTFB for comparison with HITs
+  const missTtfbCache = new Map(); // key: cacheKey, value: { ttfb, url, timestamp }
+
   browser.devtools.network.onNavigated.addListener(() => {
     insertReloadSeparator();
   });
@@ -29,7 +32,28 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function createMilliEntry(request, milliHeaders, status) {
+  // Clean up MISS TTFB data older than 5 minutes
+  function cleanupExpiredMissData() {
+    const now = Date.now();
+    const fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+    for (const [key, data] of missTtfbCache.entries()) {
+      if (now - data.timestamp > fiveMinutes) {
+        missTtfbCache.delete(key);
+      }
+    }
+  }
+
+  // Format time as milliseconds or seconds
+  function formatTime(ms) {
+    if (ms < 1000) {
+      return `${Math.round(ms)} ms`;
+    } else {
+      return `${(ms / 1000).toFixed(2)} s`;
+    }
+  }
+
+  function createMilliEntry(request, milliHeaders, status, ttfb, ttfbSavings) {
     const card = document.createElement("div");
     card.className = "entry-card highlight";
     card.setAttribute('data-status', status.toLowerCase());
@@ -79,6 +103,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Add rows for each piece of information
     if (key) addTableRow(tbody, "🧠 Key", key);
     if (time) addTableRow(tbody, "🕑 Time", time);
+    if (ttfb !== null && ttfb !== undefined) addTableRow(tbody, "⚡ TTFB", formatTime(ttfb));
 
     // Special handling for flags
     if (flags.length) {
@@ -117,14 +142,22 @@ document.addEventListener("DOMContentLoaded", () => {
       const badge = document.createElement("span");
       badge.className = "status " + status.toLowerCase();
 
-      const colorDot = status.toLowerCase() === "hit"
-        ? '<span style="color:green">●</span>'
-        : status.toLowerCase() === "miss"
-          ? '<span style="color:red">●</span>'
-          : status.toLowerCase() === "stale"
-            ? '<span style="color:orange">●</span>'
-            : '<span style="color:gray">●</span>';
-      badge.innerHTML = colorDot + " " + status.toUpperCase();
+      const dot = document.createElement("span");
+      dot.textContent = "● ";
+
+      const statusLower = status.toLowerCase();
+      if (statusLower === "hit") {
+        dot.style.color = "green";
+      } else if (statusLower === "miss") {
+        dot.style.color = "red";
+      } else if (statusLower === "stale") {
+        dot.style.color = "orange";
+      } else {
+        dot.style.color = "gray";
+      }
+
+      badge.appendChild(dot);
+      badge.appendChild(document.createTextNode(status.toUpperCase()));
 
       valueCell.appendChild(badge);
       row.appendChild(labelCell);
@@ -134,6 +167,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (reason) addTableRow(tbody, "💬 Reason", reason);
     if (expires) addTableRow(tbody, "⏳ Expires", expires);
+
+    // Add TTFB savings row if available
+    if (ttfbSavings) {
+      addTtfbSavingsRow(tbody, ttfbSavings);
+    }
 
     // Add table body to table
     table.appendChild(tbody);
@@ -166,7 +204,50 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const valueCell = document.createElement("td");
     valueCell.className = "value";
-    valueCell.innerHTML = `<strong>${value}</strong>`;
+    const strong = document.createElement("strong");
+    strong.textContent = value;
+    valueCell.appendChild(strong);
+
+    row.appendChild(labelCell);
+    row.appendChild(valueCell);
+    tbody.appendChild(row);
+  }
+
+  // Helper function to add TTFB savings row
+  function addTtfbSavingsRow(tbody, savingsData) {
+    const row = document.createElement("tr");
+    row.className = "savings-row";
+
+    const labelCell = document.createElement("td");
+    labelCell.className = "label";
+    labelCell.textContent = "💰 Savings";
+
+    const valueCell = document.createElement("td");
+    valueCell.className = "value savings-value";
+
+    // Main savings display
+    const mainLine = document.createElement("div");
+    mainLine.className = "savings-main";
+
+    const arrow = savingsData.timeSaved >= 0 ? "↓" : "↑";
+    const absTimeSaved = Math.abs(savingsData.timeSaved);
+
+    const mainText = document.createElement("strong");
+    mainText.textContent = `${arrow} ${Math.round(absTimeSaved)}ms faster`;
+    mainLine.appendChild(mainText);
+
+    const percentSpan = document.createElement("span");
+    percentSpan.className = "savings-percent";
+    percentSpan.textContent = ` (${savingsData.percentSaved}% improvement)`;
+    mainLine.appendChild(percentSpan);
+
+    // Comparison line
+    const compLine = document.createElement("div");
+    compLine.className = "savings-comparison";
+    compLine.textContent = `MISS: ${Math.round(savingsData.missTtfb)}ms → HIT: ${Math.round(savingsData.hitTtfb)}ms`;
+
+    valueCell.appendChild(mainLine);
+    valueCell.appendChild(compLine);
 
     row.appendChild(labelCell);
     row.appendChild(valueCell);
@@ -174,19 +255,17 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   browser.devtools.network.onRequestFinished.addListener((request) => {
-  const url = new URL(request.request.url);
-  if (/favicon\.ico([?#].*)?$/.test(url.pathname)) {
-    return;
-  }
+    const url = new URL(request.request.url);
+    if (/favicon\.ico([?#].*)?$/.test(url.pathname)) {
+      return;
+    }
 
     const headers = request.response.headers;
     const statusHeader = headers.find(h => h.name.toLowerCase() === "x-millicache-status");
 
-
     const statusVal = statusHeader?.value?.toLowerCase() || '';
     const mime = request.response?.content?.mimeType || '';
     if (!(["hit", "miss", "stale"].includes(statusVal) || (statusVal === "bypass" && mime.includes("text/html")))) {
-
       return;
     }
 
@@ -194,8 +273,42 @@ document.addEventListener("DOMContentLoaded", () => {
       h.name.toLowerCase().startsWith("x-millicache-")
     );
 
+    // Extract TTFB from HAR timings
+    const ttfb = request.timings?.wait;
+
+    // Get cache key for tracking
+    const keyHeader = headers.find(h => h.name.toLowerCase() === "x-millicache-key");
+    const cacheKey = keyHeader?.value || request.request.url;
+
+    // Clean up expired MISS data
+    cleanupExpiredMissData();
+
+    // Calculate TTFB savings
+    let ttfbSavings = null;
+
+    if (statusVal === "miss" && ttfb !== null && ttfb !== undefined) {
+      // Store MISS TTFB for future comparison
+      missTtfbCache.set(cacheKey, {
+        ttfb: ttfb,
+        url: request.request.url,
+        timestamp: Date.now()
+      });
+    } else if (statusVal === "hit" && ttfb !== null && ttfb !== undefined && missTtfbCache.has(cacheKey)) {
+      // Calculate savings compared to MISS
+      const missData = missTtfbCache.get(cacheKey);
+      const timeSaved = missData.ttfb - ttfb;
+      const percentSaved = missData.ttfb > 0 ? Math.round((timeSaved / missData.ttfb) * 100) : 0;
+
+      ttfbSavings = {
+        timeSaved: timeSaved,
+        percentSaved: percentSaved,
+        missTtfb: missData.ttfb,
+        hitTtfb: ttfb
+      };
+    }
+
     if (milliHeaders.length) {
-      createMilliEntry(request, milliHeaders, statusHeader.value);
+      createMilliEntry(request, milliHeaders, statusHeader.value, ttfb, ttfbSavings);
     }
   });
 });
