@@ -293,7 +293,7 @@ document.addEventListener("DOMContentLoaded", () => {
         url: request.request.url,
         timestamp: Date.now()
       });
-    } else if (statusVal === "hit" && ttfb !== null && ttfb !== undefined && missTtfbCache.has(cacheKey)) {
+    } else if ((statusVal === "hit" || statusVal === "stale") && ttfb !== null && ttfb !== undefined && missTtfbCache.has(cacheKey)) {
       // Calculate savings compared to MISS
       const missData = missTtfbCache.get(cacheKey);
       const timeSaved = missData.ttfb - ttfb;
