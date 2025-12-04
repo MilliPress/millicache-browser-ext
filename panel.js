@@ -32,18 +32,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Clean up MISS TTFB data older than 5 minutes
-  function cleanupExpiredMissData() {
-    const now = Date.now();
-    const fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
-
-    for (const [key, data] of missTtfbCache.entries()) {
-      if (now - data.timestamp > fiveMinutes) {
-        missTtfbCache.delete(key);
-      }
-    }
-  }
-
   // Format time as milliseconds or seconds
   function formatTime(ms) {
     if (ms < 1000) {
@@ -279,9 +267,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // Get cache key for tracking
     const keyHeader = headers.find(h => h.name.toLowerCase() === "x-millicache-key");
     const cacheKey = keyHeader?.value || request.request.url;
-
-    // Clean up expired MISS data
-    cleanupExpiredMissData();
 
     // Calculate TTFB savings
     let ttfbSavings = null;
