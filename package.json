@@ -1,12 +1,12 @@
 {
   "name": "millicache-headers-inspector",
-  "version": "1.0.7",
+  "version": "1.0.9",
   "description": "Inspect MilliCache headers in Firefox DevTools panel",
   "scripts": {
     "lint": "web-ext lint --source-dir=. --ignore-files '*.md' '.DS_Store' '.idea/**' '*.zip' 'package.json' 'package-lock.json' 'node_modules/**' '.env' '.env.example' '.git/**' '.gitignore' 'RELEASE.md' 'CLAUDE.md'",
     "build": "web-ext build --source-dir=. --overwrite-dest --ignore-files '*.md' '.DS_Store' '.idea/**' '*.zip' 'package.json' 'package-lock.json' 'node_modules/**' '.env' '.env.example' '.git/**' '.gitignore' 'RELEASE.md' 'CLAUDE.md'",
     "package": "npm run lint && npm run build",
-    "publish:amo": "dotenv -e .env -- web-ext sign --source-dir=. --channel=listed --api-key=$AMO_JWT_ISSUER --api-secret=$AMO_JWT_SECRET --ignore-files '*.md' '.DS_Store' '.idea/**' '*.zip' 'package.json' 'package-lock.json' 'node_modules/**' '.env' '.env.example' '.git/**' '.gitignore' 'RELEASE.md' 'CLAUDE.md'",
+    "publish:amo": "dotenv -e .env -- sh -c 'web-ext sign --source-dir=. --channel=listed --api-key=\"$AMO_JWT_ISSUER\" --api-secret=\"$AMO_JWT_SECRET\" --ignore-files \"*.md\" \".DS_Store\" \".idea/**\" \"*.zip\" \"package.json\" \"package-lock.json\" \"node_modules/**\" \".env\" \".env.example\" \".git/**\" \".gitignore\" \"RELEASE.md\" \"CLAUDE.md\"'",
     "start": "web-ext run --source-dir=. --start-url about:debugging --firefox=/Applications/Firefox\\ Developer\\ Edition.app/Contents/MacOS/firefox"
   },
   "devDependencies": {

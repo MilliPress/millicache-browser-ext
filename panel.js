@@ -208,7 +208,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const labelCell = document.createElement("td");
     labelCell.className = "label";
-    labelCell.textContent = "💰 Savings";
+    labelCell.textContent = "📉 Savings";
 
     const valueCell = document.createElement("td");
     valueCell.className = "value savings-value";
@@ -264,9 +264,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // Extract TTFB from HAR timings
     const ttfb = request.timings?.wait;
 
-    // Get cache key for tracking
-    const keyHeader = headers.find(h => h.name.toLowerCase() === "x-millicache-key");
-    const cacheKey = keyHeader?.value || request.request.url;
+    // Use URL as cache key for consistent MISS/HIT matching
+    const cacheKey = request.request.url;
 
     // Calculate TTFB savings
     let ttfbSavings = null;
