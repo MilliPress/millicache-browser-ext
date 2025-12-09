@@ -33,7 +33,8 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "millicache@headers.dev",
-      "strict_min_version": "96.0"
+      "strict_min_version": "96.0",
+      "update_url": "https://millipress.github.io/millicache-headers-inspector/updates.json"
     }
   }
 }
