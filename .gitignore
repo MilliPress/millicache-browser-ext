@@ -1,6 +1,7 @@
 # Build artifacts
 web-ext-artifacts/
 *.zip
+*.xpi
 
 # Dependencies
 node_modules/

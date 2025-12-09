@@ -1,0 +1,89 @@
+name: Build, Sign & Publish Firefox Add-on
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-sign-upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Lint Extension
+        run: npm run lint
+
+      - name: Extract Version
+        id: version
+        run: |
+          VERSION=$(echo "${{ github.event.release.tag_name }}" | sed 's/^v//')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build & Sign Extension (Unlisted)
+        id: sign
+        uses: kewisch/action-web-ext@v1
+        with:
+          cmd: sign
+          source: .
+          channel: unlisted
+          apiKey: ${{ secrets.AMO_JWT_ISSUER }}
+          apiSecret: ${{ secrets.AMO_JWT_SECRET }}
+          timeout: 900000
+
+      - name: Find Signed XPI
+        id: xpi
+        run: |
+          XPI_PATH=$(find web-ext-artifacts -name "*.xpi" -type f | head -1)
+          if [ -z "$XPI_PATH" ]; then
+            echo "::error::No signed XPI found in web-ext-artifacts/"
+            exit 1
+          fi
+          XPI_NAME="millicache-${{ steps.version.outputs.version }}.xpi"
+          mv "$XPI_PATH" "web-ext-artifacts/$XPI_NAME"
+          echo "path=web-ext-artifacts/$XPI_NAME" >> $GITHUB_OUTPUT
+          echo "name=$XPI_NAME" >> $GITHUB_OUTPUT
+          echo "url=https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/$XPI_NAME" >> $GITHUB_OUTPUT
+
+      - name: Upload XPI to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: ${{ steps.xpi.outputs.path }}
+          fail_on_unmatched_files: true
+
+      - name: Update updates.json
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          XPI_URL="${{ steps.xpi.outputs.url }}"
+          UPDATES_FILE="docs/updates.json"
+
+          # Update the JSON file using jq
+          jq --arg version "$VERSION" --arg url "$XPI_URL" \
+            '.addons["millicache@headers.dev"].updates = [{"version": $version, "update_link": $url}] + .addons["millicache@headers.dev"].updates' \
+            "$UPDATES_FILE" > tmp.json && mv tmp.json "$UPDATES_FILE"
+
+          echo "Updated updates.json with version $VERSION"
+
+      - name: Commit updates.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/updates.json
+          git commit -m "chore: update updates.json for v${{ steps.version.outputs.version }}"
+          git push origin main
