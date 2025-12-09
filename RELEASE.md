@@ -89,7 +89,7 @@ Get credentials from: https://addons.mozilla.org/developers/addon/api/key/
 
 The `updates.json` will be available at:
 ```
-https://millipress.github.io/millicache-headers-inspector/updates.json
+https://millipress.github.io/millicache-firefox-ext/updates.json
 ```
 
 ---
