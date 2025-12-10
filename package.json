@@ -1,6 +1,6 @@
 {
   "name": "millicache-headers-inspector",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "Inspect MilliCache headers in Firefox DevTools panel",
   "scripts": {
     "lint": "web-ext lint --source-dir=. --self-hosted --ignore-files '*.md' '.DS_Store' '.idea/**' '*.zip' 'package.json' 'package-lock.json' 'node_modules/**' '.env' '.env.example' '.git/**' '.gitignore' 'RELEASE.md' 'CLAUDE.md' 'docs/**' 'release-please-config.json' '.release-please-manifest.json' '.github/**'",

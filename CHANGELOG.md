@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.10](https://github.com/MilliPress/millicache-firefox-ext/compare/v1.0.9...v1.0.10) (2025-12-09)
+
+
+### Bug Fixes
+
+* correct update_url to match repository name ([d561005](https://github.com/MilliPress/millicache-firefox-ext/commit/d5610051c0cae32941de5aeca7399e70dd499fb6))
+
 ## [1.0.9] - 2025-12-08
 
 ### Fixed
