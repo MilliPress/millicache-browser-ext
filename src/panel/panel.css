@@ -286,11 +286,11 @@ body {
 }
 
 .entry-card.compact .expired-badge {
-  display: none !important;
+  visibility: hidden;
 }
 
 .entry-card.compact:hover .expired-badge {
-  display: inline !important;
+  visibility: visible;
 }
 
 /* ==========================================================================
