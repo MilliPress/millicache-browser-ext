@@ -575,9 +575,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     card.appendChild(content);
 
-    // Click handler
+    // Click handler with error recovery
     card.addEventListener("click", () => {
-      browser.devtools.inspectedWindow.eval(`window.location.href = ${JSON.stringify(requestUrl)}`);
+      browser.devtools.inspectedWindow.eval(`window.location.href = ${JSON.stringify(requestUrl)}`)
+        .catch(() => {
+          // On error, force reload the page to reset state
+          browser.devtools.inspectedWindow.reload();
+        });
     });
 
     // Track card
