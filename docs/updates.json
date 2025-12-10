@@ -1,7 +1,12 @@
 {
   "addons": {
     "millicache@headers.dev": {
-      "updates": []
+      "updates": [
+        {
+          "version": "1.0.11",
+          "update_link": "https://github.com/MilliPress/millicache-firefox-ext/releases/download/v1.0.11/millicache-1.0.11.xpi"
+        }
+      ]
     }
   }
 }
