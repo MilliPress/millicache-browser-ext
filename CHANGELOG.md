@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.1.0](https://github.com/MilliPress/millicache-firefox-ext/compare/v1.0.12...v1.1.0) (2025-12-10)
+
+
+### Features
+
+* add debug mode notice and site deactivation ([d942021](https://github.com/MilliPress/millicache-firefox-ext/commit/d942021f766ffbc2342daa40e405d133477db950))
+* improve panel UX with navigation markers and status transitions ([a0b1f6c](https://github.com/MilliPress/millicache-firefox-ext/commit/a0b1f6cd53a3fed2fa5afc5ed0412f26cd9c1fbb))
+
+
+### Bug Fixes
+
+* bump version to 1.0.11 for release workflow testing ([7c3717a](https://github.com/MilliPress/millicache-firefox-ext/commit/7c3717adbd7d0140a24e4523a345f4cd14e2d956))
+* correct update_url to match repository name ([e8a0efa](https://github.com/MilliPress/millicache-firefox-ext/commit/e8a0efa639b918cca740bdc9d5fd9cea14628b8b))
+* handle case where signed XPI already has correct filename ([524abbe](https://github.com/MilliPress/millicache-firefox-ext/commit/524abbeb8810714887de59e1f19dff84760dd818))
+* use correct icon for dark mode in DevTools panel ([f7c67a0](https://github.com/MilliPress/millicache-firefox-ext/commit/f7c67a08fc01e9965417e3683c1d9b2d65fc4a64))
+* use separate build step before signing in release workflow ([514ed20](https://github.com/MilliPress/millicache-firefox-ext/commit/514ed205c1436776b94fb15910296325f85b0a40))
+
 ## [1.0.12](https://github.com/MilliPress/millicache-firefox-ext/compare/v1.0.11...v1.0.12) (2025-12-10)
 
 
