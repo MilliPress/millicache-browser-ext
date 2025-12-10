@@ -32,6 +32,20 @@ document.addEventListener("DOMContentLoaded", () => {
     browser.devtools.inspectedWindow.eval(`window.location.href = ${JSON.stringify(url)}`);
   }
 
+  // Event delegation for card clicks - more reliable than per-card handlers
+  log.addEventListener("click", (e) => {
+    const card = e.target.closest(".entry-card");
+    if (!card) return;
+
+    // Don't navigate if clicking on a pill (copy to clipboard)
+    if (e.target.closest(".pill")) return;
+
+    const url = card.querySelector(".card-url")?.textContent;
+    if (url) {
+      navigateToUrl(url);
+    }
+  });
+
   // Global countdown timer - all countdowns update together
   const countdownElements = new Set();
   setInterval(() => {
@@ -595,11 +609,6 @@ document.addEventListener("DOMContentLoaded", () => {
       transitionLabel
     });
     card.appendChild(content);
-
-    // Click handler
-    card.addEventListener("click", () => {
-      navigateToUrl(requestUrl);
-    });
 
     // Track card
     cardsByUrl.set(requestUrl, card);
