@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.1](https://github.com/MilliPress/millicache-firefox-ext/compare/v1.1.0...v1.1.1) (2025-12-10)
+
+
+### Bug Fixes
+
+* correct order of additional info display in panel ([89e4679](https://github.com/MilliPress/millicache-firefox-ext/commit/89e4679f0b4acd59e957ec643a5212b1136136a9))
+* simplify release-please config (remove package-name) ([476c2c5](https://github.com/MilliPress/millicache-firefox-ext/commit/476c2c590263bfc760ccac0cb81dbe619a250293))
+* update paths for src/ directory structure ([39bfaf8](https://github.com/MilliPress/millicache-firefox-ext/commit/39bfaf84b244f6456d85d499ace34df0b9da6942))
+
 ## [1.1.0](https://github.com/MilliPress/millicache-firefox-ext/compare/v1.0.12...v1.1.0) (2025-12-10)
 
 
