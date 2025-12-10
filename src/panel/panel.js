@@ -6,9 +6,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const dismissDebugNoticeBtn = document.getElementById("dismiss-debug-notice");
 
   let lastSeparator = null;
-  let isDeactivated = false;
-  let requestsWithoutMilliCache = 0;
-  let hasSeenMilliCache = false;
+  let isDeactivated = true; // Start deactivated, activate on first MilliCache header
+  let hasSeenMilliCacheOnSite = false; // Track if we've seen MilliCache headers on current site
   let debugNoticeDismissed = false;
   let hasShownDebugNotice = false;
 
@@ -18,7 +17,6 @@ document.addEventListener("DOMContentLoaded", () => {
   // Activate button click handler
   activateBtn.addEventListener("click", () => {
     isDeactivated = false;
-    requestsWithoutMilliCache = 0;
     deactivatedBanner.style.display = "none";
     log.style.display = "flex";
   });
@@ -35,6 +33,12 @@ document.addEventListener("DOMContentLoaded", () => {
     log.style.display = "none";
   }
 
+  function showActivatedState() {
+    isDeactivated = false;
+    deactivatedBanner.style.display = "none";
+    log.style.display = "flex";
+  }
+
   function showDebugNotice() {
     if (!debugNoticeDismissed && !hasShownDebugNotice) {
       hasShownDebugNotice = true;
@@ -47,12 +51,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   browser.devtools.network.onNavigated.addListener(() => {
-    // Reset detection counters on navigation
-    if (!isDeactivated) {
-      requestsWithoutMilliCache = 0;
-      hasSeenMilliCache = false;
-      hasShownDebugNotice = false;
-    }
+    // Reset state on navigation to new page
+    hasShownDebugNotice = false;
+    hasSeenMilliCacheOnSite = false;
     insertReloadSeparator();
   });
 
@@ -290,11 +291,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   browser.devtools.network.onRequestFinished.addListener((request) => {
-    // Skip if deactivated
-    if (isDeactivated) {
-      return;
-    }
-
     const url = new URL(request.request.url);
     if (/favicon\.ico([?#].*)?$/.test(url.pathname)) {
       return;
@@ -304,29 +300,30 @@ document.addEventListener("DOMContentLoaded", () => {
     const statusHeader = headers.find(h => h.name.toLowerCase() === "x-millicache-status");
     const mime = request.response?.content?.mimeType || '';
 
-    // Check if this is a document request (HTML)
-    const isDocumentRequest = mime.includes("text/html");
+    // Check if this is a main document request (HTML page, not XHR/fetch)
+    // Use strict MIME check and request type
+    const isMainDocument = mime === "text/html" && request.request.method === "GET" &&
+      !request.request.url.includes("/wp-json/") && !request.request.url.includes("/api/");
 
-    // If no status header on document requests, track for potential deactivation
-    if (!statusHeader && isDocumentRequest) {
-      if (!hasSeenMilliCache) {
-        requestsWithoutMilliCache++;
-        // After 3 document requests without MilliCache headers, deactivate
-        if (requestsWithoutMilliCache >= 3) {
-          showDeactivatedState();
-        }
+    // No MilliCache header found
+    if (!statusHeader) {
+      // If this is a main document without MilliCache and we haven't seen any yet, deactivate
+      if (isMainDocument && !hasSeenMilliCacheOnSite && !isDeactivated) {
+        showDeactivatedState();
       }
       return;
     }
 
-    // If we have a status header, we've seen MilliCache
-    if (statusHeader) {
-      hasSeenMilliCache = true;
-      requestsWithoutMilliCache = 0;
+    // MilliCache header detected
+    hasSeenMilliCacheOnSite = true;
+
+    // Auto-activate if deactivated
+    if (isDeactivated) {
+      showActivatedState();
     }
 
     const statusVal = statusHeader?.value?.toLowerCase() || '';
-    if (!(["hit", "miss", "stale"].includes(statusVal) || (statusVal === "bypass" && isDocumentRequest))) {
+    if (!(["hit", "miss", "stale"].includes(statusVal) || (statusVal === "bypass" && isMainDocument))) {
       return;
     }
 
