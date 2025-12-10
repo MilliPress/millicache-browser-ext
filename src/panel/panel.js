@@ -25,9 +25,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // Track MISS TTFB for comparison with HITs
   const missTtfbCache = new Map();
 
-  // Track cards by URL for reuse when clicking to reload
+  // Track cards by URL for reuse
   const cardsByUrl = new Map();
-  const pendingReloads = new Set();
 
   // Activate button click handler
   activateBtn.addEventListener("click", () => {
@@ -70,12 +69,6 @@ document.addEventListener("DOMContentLoaded", () => {
     hasSeenMilliCacheOnSite = false;
 
     const isReload = (url === lastNavigatedUrl);
-
-    // Clear pending reloads that don't match the new URL
-    if (!isReload) {
-      pendingReloads.clear();
-    }
-
     insertNavigationSeparator(isReload);
     lastNavigatedUrl = url;
   });
@@ -535,12 +528,9 @@ document.addEventListener("DOMContentLoaded", () => {
   function createMilliEntry(request, milliHeaders, status, ttfb, ttfbSavings) {
     const requestUrl = request.request.url;
 
-    // Check if this is a reload triggered by clicking a card
+    // Reuse existing card if one exists for this URL
     const existingCard = cardsByUrl.get(requestUrl);
-    const isClickReload = pendingReloads.has(requestUrl) && existingCard && existingCard.isConnected;
-
-    if (isClickReload) {
-      pendingReloads.delete(requestUrl);
+    if (existingCard && existingCard.isConnected) {
       updateExistingCard(existingCard, request, milliHeaders, status, ttfb, ttfbSavings);
       return;
     }
@@ -587,7 +577,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Click handler
     card.addEventListener("click", () => {
-      pendingReloads.add(requestUrl);
       browser.devtools.inspectedWindow.eval(`window.location.href = ${JSON.stringify(requestUrl)}`);
     });
 
