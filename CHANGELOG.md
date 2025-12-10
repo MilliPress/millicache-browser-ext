@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.0.12](https://github.com/MilliPress/millicache-firefox-ext/compare/v1.0.11...v1.0.12) (2025-12-10)
+
+
+### Bug Fixes
+
+* fix release workflow to use separate build/sign steps ([601f41c](https://github.com/MilliPress/millicache-firefox-ext/commit/601f41c))
+* handle case where signed XPI already has correct filename ([122cbc7](https://github.com/MilliPress/millicache-firefox-ext/commit/122cbc7))
+
+
+### Features
+
+* add workflow_dispatch trigger for manual release testing
+
+
+## [1.0.11](https://github.com/MilliPress/millicache-firefox-ext/compare/v1.0.10...v1.0.11) (2025-12-10)
+
+
+### Bug Fixes
+
+* bump version to 1.0.11 for release workflow testing
+
+
 ## [1.0.10](https://github.com/MilliPress/millicache-firefox-ext/compare/v1.0.9...v1.0.10) (2025-12-09)
 
 
