@@ -541,19 +541,23 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-    // Move to top with animation
-    card.style.animation = "none";
-    card.offsetHeight;
-    card.style.animation = "";
-
+    // Move to top with slide-up animation
     log.prepend(card);
     insertPendingSeparatorAfter(card);
+
+    // Apply move-up and flash animations
+    card.classList.add("moving-up", "flash");
 
     // Then expand the card (grows into view)
     requestAnimationFrame(() => {
       card.classList.remove("compact");
       card.classList.add("highlight");
     });
+
+    // Clean up animation classes after they complete
+    card.addEventListener("animationend", () => {
+      card.classList.remove("moving-up", "flash");
+    }, { once: true });
   }
 
   function createMilliEntry(request, milliHeaders, status, ttfb, ttfbSavings) {
