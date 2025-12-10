@@ -1,11 +1,58 @@
 document.addEventListener("DOMContentLoaded", () => {
   const log = document.getElementById("log");
+  const deactivatedBanner = document.getElementById("deactivated-banner");
+  const activateBtn = document.getElementById("activate-btn");
+  const debugNotice = document.getElementById("debug-notice");
+  const dismissDebugNoticeBtn = document.getElementById("dismiss-debug-notice");
+
   let lastSeparator = null;
+  let isDeactivated = false;
+  let requestsWithoutMilliCache = 0;
+  let hasSeenMilliCache = false;
+  let debugNoticeDismissed = false;
+  let hasShownDebugNotice = false;
 
   // Track MISS TTFB for comparison with HITs
   const missTtfbCache = new Map(); // key: cacheKey, value: { ttfb, url, timestamp }
 
+  // Activate button click handler
+  activateBtn.addEventListener("click", () => {
+    isDeactivated = false;
+    requestsWithoutMilliCache = 0;
+    deactivatedBanner.style.display = "none";
+    log.style.display = "flex";
+  });
+
+  // Dismiss debug notice
+  dismissDebugNoticeBtn.addEventListener("click", () => {
+    debugNoticeDismissed = true;
+    debugNotice.style.display = "none";
+  });
+
+  function showDeactivatedState() {
+    isDeactivated = true;
+    deactivatedBanner.style.display = "block";
+    log.style.display = "none";
+  }
+
+  function showDebugNotice() {
+    if (!debugNoticeDismissed && !hasShownDebugNotice) {
+      hasShownDebugNotice = true;
+      debugNotice.style.display = "block";
+    }
+  }
+
+  function hideDebugNotice() {
+    debugNotice.style.display = "none";
+  }
+
   browser.devtools.network.onNavigated.addListener(() => {
+    // Reset detection counters on navigation
+    if (!isDeactivated) {
+      requestsWithoutMilliCache = 0;
+      hasSeenMilliCache = false;
+      hasShownDebugNotice = false;
+    }
     insertReloadSeparator();
   });
 
@@ -243,6 +290,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   browser.devtools.network.onRequestFinished.addListener((request) => {
+    // Skip if deactivated
+    if (isDeactivated) {
+      return;
+    }
+
     const url = new URL(request.request.url);
     if (/favicon\.ico([?#].*)?$/.test(url.pathname)) {
       return;
@@ -250,16 +302,60 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const headers = request.response.headers;
     const statusHeader = headers.find(h => h.name.toLowerCase() === "x-millicache-status");
+    const mime = request.response?.content?.mimeType || '';
+
+    // Check if this is a document request (HTML)
+    const isDocumentRequest = mime.includes("text/html");
+
+    // If no status header on document requests, track for potential deactivation
+    if (!statusHeader && isDocumentRequest) {
+      if (!hasSeenMilliCache) {
+        requestsWithoutMilliCache++;
+        // After 3 document requests without MilliCache headers, deactivate
+        if (requestsWithoutMilliCache >= 3) {
+          showDeactivatedState();
+        }
+      }
+      return;
+    }
+
+    // If we have a status header, we've seen MilliCache
+    if (statusHeader) {
+      hasSeenMilliCache = true;
+      requestsWithoutMilliCache = 0;
+    }
 
     const statusVal = statusHeader?.value?.toLowerCase() || '';
-    const mime = request.response?.content?.mimeType || '';
-    if (!(["hit", "miss", "stale"].includes(statusVal) || (statusVal === "bypass" && mime.includes("text/html")))) {
+    if (!(["hit", "miss", "stale"].includes(statusVal) || (statusVal === "bypass" && isDocumentRequest))) {
       return;
     }
 
     const milliHeaders = headers.filter(h =>
       h.name.toLowerCase().startsWith("x-millicache-")
     );
+
+    // Check if only status header is present (debug mode not active)
+    // Debug headers include: key, time, flags, gzip, reason, expires
+    const hasDebugHeaders = milliHeaders.some(h => {
+      const name = h.name.toLowerCase();
+      return name !== "x-millicache-status" &&
+             (name === "x-millicache-key" ||
+              name === "x-millicache-time" ||
+              name === "x-millicache-flags" ||
+              name === "x-millicache-gzip" ||
+              name === "x-millicache-reason" ||
+              name === "x-millicache-expires");
+    });
+
+    // Show debug notice only if:
+    // - Only status header is present (no debug headers)
+    // - AND it's not a MISS (MISS only outputs status header by design)
+    if (milliHeaders.length === 1 && statusHeader && !hasDebugHeaders && statusVal !== "miss") {
+      showDebugNotice();
+    } else if (hasDebugHeaders) {
+      // Debug headers present - hide notice if shown
+      hideDebugNotice();
+    }
 
     // Extract TTFB from HAR timings
     const ttfb = request.timings?.wait;
