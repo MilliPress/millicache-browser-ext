@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/MilliPress/millicache-firefox-ext/compare/v1.1.0...v1.1.1) (2025-12-10)
+
+
+### Bug Fixes
+
+* update paths for src/ directory structure ([39bfaf8](https://github.com/MilliPress/millicache-firefox-ext/commit/39bfaf84b244f6456d85d499ace34df0b9da6942))
+
 ## [1.1.0](https://github.com/MilliPress/millicache-firefox-ext/compare/v1.0.12...v1.1.0) (2025-12-10)
 
 
