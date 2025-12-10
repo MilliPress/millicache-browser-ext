@@ -30,21 +30,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Navigation state - prevent rapid clicks
   let isNavigating = false;
+  let navigationTimeout = null;
 
   function navigateToUrl(url) {
     if (isNavigating) return;
     isNavigating = true;
 
+    // Failsafe: reset after 2 seconds no matter what
+    if (navigationTimeout) clearTimeout(navigationTimeout);
+    navigationTimeout = setTimeout(() => {
+      isNavigating = false;
+    }, 2000);
+
     browser.devtools.inspectedWindow.eval(`window.location.href = ${JSON.stringify(url)}`)
       .catch(() => {
-        // On error, force reload
+        // On error, reset immediately and try reload
+        isNavigating = false;
+        if (navigationTimeout) clearTimeout(navigationTimeout);
         browser.devtools.inspectedWindow.reload();
-      })
-      .finally(() => {
-        // Reset after a delay to allow navigation to complete
-        setTimeout(() => {
-          isNavigating = false;
-        }, 500);
       });
   }
 
@@ -101,7 +104,13 @@ document.addEventListener("DOMContentLoaded", () => {
   browser.devtools.network.onNavigated.addListener((url) => {
     hasShownDebugNotice = false;
     hasSeenMilliCacheOnSite = false;
-    isNavigating = false; // Reset navigation lock
+
+    // Reset navigation lock
+    isNavigating = false;
+    if (navigationTimeout) {
+      clearTimeout(navigationTimeout);
+      navigationTimeout = null;
+    }
 
     const isReload = (url === lastNavigatedUrl);
     insertNavigationSeparator(isReload);
