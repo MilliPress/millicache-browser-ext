@@ -265,15 +265,15 @@ body {
   margin-left: 0.5rem;
   font-size: 0.65rem;
   padding: 0.15rem 0.4rem;
-  background-color: var(--primary-light);
-  color: var(--primary-dark);
-  font-weight: 500;
+  background-color: transparent;
+  color: var(--gray-400);
+  font-weight: 400;
   border-radius: 3px;
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
 
-/* Expired badge */
+/* Expired badge - only visible when card is highlighted */
 .expired-badge {
   margin-left: 0.5rem;
   font-size: 0.65rem;
@@ -283,6 +283,10 @@ body {
   font-weight: 500;
   border-radius: 3px;
   text-transform: uppercase;
+}
+
+.entry-card.compact .expired-badge {
+  display: none !important;
 }
 
 /* ==========================================================================
@@ -595,8 +599,8 @@ body {
   }
 
   .transition-badge {
-    background-color: var(--primary-dark);
-    color: var(--gray-100);
+    background-color: transparent;
+    color: var(--gray-500);
   }
 
   .expired-badge {
