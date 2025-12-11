@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.2.0](https://github.com/MilliPress/millicache-firefox-ext/compare/v1.1.1...v1.2.0) (2025-12-11)
+
+
+### Features
+
+* add slide-up and flash animation when card moves to top ([48c448f](https://github.com/MilliPress/millicache-firefox-ext/commit/48c448f90fab3a1d669a9d53958693befe86e5c9))
+* major UI redesign with flexbox layout and animations ([87755c1](https://github.com/MilliPress/millicache-firefox-ext/commit/87755c1d3f1dd81e7a9061fc2da0cb912cbfd4dd))
+
+
+### Bug Fixes
+
+* add error recovery for card click navigation ([05f80c7](https://github.com/MilliPress/millicache-firefox-ext/commit/05f80c77e1698272da5a748214e6e2fe3cbb3330))
+* add failsafe timeout for navigation lock ([ba66c97](https://github.com/MilliPress/millicache-firefox-ext/commit/ba66c974b3a357806b1626c567025a672a1455a5))
+* allow multiple card clicks without blocking navigation ([dae41b6](https://github.com/MilliPress/millicache-firefox-ext/commit/dae41b6b41c00f718bdef564d2a3dba01b22918f))
+* only show expired badge on hover when actually expired ([c494e44](https://github.com/MilliPress/millicache-firefox-ext/commit/c494e445c7319e148543ae406824655ae23b65e9))
+* remove slide-up animation, keep only flash for moved cards ([6739ebd](https://github.com/MilliPress/millicache-firefox-ext/commit/6739ebdce4ba205044eaaa37e693bc53b2e2898c))
+* show expired badge on hover in compact mode, fix separator placement ([f865106](https://github.com/MilliPress/millicache-firefox-ext/commit/f865106aae697e5597d96baf5f3310bd6ed8f0a9))
+* simplify card reuse logic to always update existing cards ([522d407](https://github.com/MilliPress/millicache-firefox-ext/commit/522d40756bf32fd99768c38606c1e822679e2282))
+* sync countdowns and prevent rapid click navigation issues ([344b18a](https://github.com/MilliPress/millicache-firefox-ext/commit/344b18a9be79b54659228640e583e46af6901d1c))
+* update status transition message from 'invalidated' to 'cleared' ([a97cb1d](https://github.com/MilliPress/millicache-firefox-ext/commit/a97cb1d1570dbfe1277d974428cee2a5884a4f85))
+* use event delegation for card clicks ([876e805](https://github.com/MilliPress/millicache-firefox-ext/commit/876e805c64a9e34b27076e370c77b21249b79eee))
+
 ## [1.1.1](https://github.com/MilliPress/millicache-firefox-ext/compare/v1.1.0...v1.1.1) (2025-12-10)
 
 
