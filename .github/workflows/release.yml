@@ -9,6 +9,17 @@ on:
         description: '⚠️ AUTOMATED PROCESS - Only use for emergency releases. Enter tag (e.g., v1.0.0)'
         required: true
         type: string
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Release tag to build'
+        required: true
+        type: string
+    secrets:
+      AMO_JWT_ISSUER:
+        required: true
+      AMO_JWT_SECRET:
+        required: true
 
 permissions:
   contents: write
