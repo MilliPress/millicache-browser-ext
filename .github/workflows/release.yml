@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag to build (e.g., v1.0.10)'
+        description: '⚠️ AUTOMATED PROCESS - Only use for emergency releases. Enter tag (e.g., v1.0.0)'
         required: true
         type: string
 
@@ -43,12 +43,6 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
-      - name: Update manifest.json version
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          jq --arg version "$VERSION" '.version = $version' src/manifest.json > tmp.json && mv tmp.json src/manifest.json
-          echo "Updated src/manifest.json to version $VERSION"
-
       - name: Build Extension
         id: build
         uses: kewisch/action-web-ext@v1
@@ -75,7 +69,7 @@ jobs:
             echo "::error::No signed XPI found in web-ext-artifacts/"
             exit 1
           fi
-          XPI_NAME="millicache-${{ steps.version.outputs.version }}.xpi"
+          XPI_NAME="millicache-firefox-${{ steps.version.outputs.version }}.xpi"
           XPI_FINAL="web-ext-artifacts/$XPI_NAME"
           # Only rename if not already the target name
           if [ "$XPI_PATH" != "$XPI_FINAL" ]; then
@@ -109,6 +103,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/updates.json src/manifest.json
+          git add docs/updates.json
           git commit -m "chore(release): ${{ steps.version.outputs.version }}"
           git push origin main
