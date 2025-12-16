@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/MilliPress/millicache-browser-ext/compare/v1.2.0...v1.2.1) (2025-12-16)
+
+
+### Bug Fixes
+
+* show bypass status cards for HTML documents ([#6](https://github.com/MilliPress/millicache-browser-ext/issues/6)) ([fa40746](https://github.com/MilliPress/millicache-browser-ext/commit/fa40746ab6ddea1724fe17dafeb1abfa49ca9dd6))
+
 ## [1.2.0](https://github.com/MilliPress/millicache-firefox-ext/compare/v1.1.1...v1.2.0) (2025-12-11)
 
 
