@@ -652,7 +652,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const statusHeader = headers.find(h => h.name.toLowerCase() === "x-millicache-status");
     const mime = request.response?.content?.mimeType || '';
 
-    const isMainDocument = mime === "text/html" && request.request.method === "GET" &&
+    const isMainDocument = mime.startsWith("text/html") && request.request.method === "GET" &&
       !request.request.url.includes("/wp-json/") && !request.request.url.includes("/api/");
 
     if (!statusHeader) {
