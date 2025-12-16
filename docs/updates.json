@@ -4,27 +4,27 @@
       "updates": [
         {
           "version": "1.2.1",
-          "update_link": "https://github.com/MilliPress/millicache-browser-ext/releases/download/v1.2.1/millicache-1.2.1.xpi"
+          "update_link": "https://github.com/MilliPress/millicache-browser-ext/releases/download/v1.2.1/millicache-firefox-1.2.1.xpi"
         },
         {
           "version": "1.2.0",
-          "update_link": "https://github.com/MilliPress/millicache-firefox-ext/releases/download/v1.2.0/millicache-1.2.0.xpi"
+          "update_link": "https://github.com/MilliPress/millicache-browser-ext/releases/download/v1.2.0/millicache-firefox-1.2.0.xpi"
         },
         {
           "version": "1.1.2",
-          "update_link": "https://github.com/MilliPress/millicache-firefox-ext/releases/download/v1.1.2/millicache-1.1.2.xpi"
+          "update_link": "https://github.com/MilliPress/millicache-browser-ext/releases/download/v1.1.2/millicache-firefox-1.1.2.xpi"
         },
         {
           "version": "1.1.0",
-          "update_link": "https://github.com/MilliPress/millicache-firefox-ext/releases/download/v1.1.0/millicache-1.1.0.xpi"
+          "update_link": "https://github.com/MilliPress/millicache-browser-ext/releases/download/v1.1.0/millicache-firefox-1.1.0.xpi"
         },
         {
           "version": "1.0.13",
-          "update_link": "https://github.com/MilliPress/millicache-firefox-ext/releases/download/v1.0.13/millicache-1.0.13.xpi"
+          "update_link": "https://github.com/MilliPress/millicache-browser-ext/releases/download/v1.0.13/millicache-firefox-1.0.13.xpi"
         },
         {
           "version": "1.0.11",
-          "update_link": "https://github.com/MilliPress/millicache-firefox-ext/releases/download/v1.0.11/millicache-1.0.11.xpi"
+          "update_link": "https://github.com/MilliPress/millicache-browser-ext/releases/download/v1.0.11/millicache-firefox-1.0.11.xpi"
         }
       ]
     }
