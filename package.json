@@ -4,7 +4,7 @@
   "description": "Inspect MilliCache headers in Firefox DevTools panel",
   "scripts": {
     "lint": "web-ext lint --source-dir=src --self-hosted",
-    "build": "web-ext build --source-dir=src --overwrite-dest",
+    "build": "web-ext build --source-dir=src --overwrite-dest --filename=millicache-firefox-{version}.xpi",
     "package": "npm run lint && npm run build",
     "publish:amo": "dotenv -e .env -- sh -c 'web-ext sign --source-dir=src --channel=unlisted --api-key=\"$AMO_JWT_ISSUER\" --api-secret=\"$AMO_JWT_SECRET\"'",
     "start": "web-ext run --source-dir=src --start-url about:debugging --firefox=/Applications/Firefox\\ Developer\\ Edition.app/Contents/MacOS/firefox"
