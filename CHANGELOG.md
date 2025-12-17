@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.1](https://github.com/MilliPress/millicache-browser-ext/compare/v1.3.0...v1.3.1) (2025-12-17)
+
+
+### Bug Fixes
+
+* auto-trigger build when Release-Please creates a release ([785dfff](https://github.com/MilliPress/millicache-browser-ext/commit/785dfff692374ee700addaacb2224c2f5eb207b3))
+* only check main document for MilliCache headers when auto-pausing ([4f2678e](https://github.com/MilliPress/millicache-browser-ext/commit/4f2678e70a7fbfb074c71a51db1c58d6e42cf735))
+
 ## [1.3.0](https://github.com/MilliPress/millicache-browser-ext/compare/v1.2.1...v1.3.0) (2025-12-16)
 
 
