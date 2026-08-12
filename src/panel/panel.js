@@ -479,7 +479,7 @@ document.addEventListener("DOMContentLoaded", () => {
    * @param {HTMLElement} grid The metrics grid.
    */
   function layoutMetrics(grid) {
-    const count = grid.children.length;
+    const count = Array.from(grid.children).filter(c => !c.classList.contains("metric--wide")).length;
     const width = grid.clientWidth;
 
     // Zero while collapsed; the observer re-runs on open.
@@ -666,20 +666,20 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       [
-        { label: "Reason", value: origin.reason, modifier: "is-plain" },
+        { label: "Reason", value: origin.reason, modifier: "is-plain", wide: true },
         // Long hashes: truncated, with the full value copied on click.
         { label: "Key", value: origin.key, modifier: "is-mono", copyable: true },
         { label: "Gzip", value: origin.gzip === null ? "" : (origin.gzip ? "Enabled" : "Disabled"), modifier: "is-plain" }
-      ].forEach(({ label, value, title, modifier, copyable }) => {
+      ].forEach(({ label, value, title, modifier, copyable, wide }) => {
         if (!value) return;
 
         const { cell, valueEl } = createMetric(label, modifier);
         valueEl.textContent = value;
         valueEl.title = title || value;
 
-        if (copyable) {
-          makeCopyable(valueEl, value);
-        }
+        // Prose, not a figure: it spans the row and wraps rather than clipping.
+        if (wide) cell.classList.add("metric--wide");
+        if (copyable) makeCopyable(valueEl, value);
 
         cells.push(cell);
       });

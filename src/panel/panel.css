@@ -654,3 +654,13 @@ body {
 .dismiss-btn:hover {
   color: var(--fg);
 }
+
+/* Prose rather than a figure, so it takes the row and wraps. */
+.metric--wide {
+  grid-column: 1 / -1;
+}
+
+.metric--wide .metric__value {
+  white-space: normal;
+  overflow: visible;
+}
