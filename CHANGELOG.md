@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+* support MilliCache Pro Edge Cache on Cloudflare and bunny.net: the panel now reports which layer served a response, showing the edge alone when it served from its own store and both layers when the request reached the origin
+* detect Edge Cache misconfigurations that are otherwise invisible: Cloudflare serving HTML as `DYNAMIC`, pages stored untagged on bunny.net, flags missing from the edge tag, a response setting no shared lifetime at all, and edge copies served past the one they set
+* explain `Cache-Control: private` responses as deliberate rather than leaving an empty card
+* mark flags that never reached the edge tag, since a flag purge cannot clear them there
+* redesign the panel in the MilliCache Pro settings UI language
+
+### Bug Fixes
+
+* read the edge lifetime from `max-age` when no `s-maxage` is present, which a shared cache falls back to (RFC 9111). MilliCache Pro emits `s-maxage` only for responses it wants stored, so a stale serve carrying only the site's own `max-age` was reported as having no edge lifetime and warned about in error
+* measure bunny.net's edge freshness from `CDN-CachedAt` rather than `Age`, which bunny.net replays from the origin verbatim instead of incrementing, and read that timestamp as UTC instead of local time
+* follow the DevTools theme via `devtools.panels.themeName` instead of `prefers-color-scheme`, which reports the OS theme and left the panel light while DevTools was dark
+* anchor the expiry countdown to an absolute instant, so a response replayed from a CDN no longer counts down from the moment its object was filled
+* stop reporting cache transitions and TTFB savings derived from headers a CDN replayed rather than the origin producing them
+* stop reading `Vary: Accept-Encoding` as a variant, which marked nearly every compressed response as one
+* drop `url:` flags from the edge tag list, as the origin flag list already did
+
 ## [1.3.1](https://github.com/MilliPress/millicache-browser-ext/compare/v1.3.0...v1.3.1) (2025-12-17)
 
 

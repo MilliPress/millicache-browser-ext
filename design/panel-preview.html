@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MilliCache panel — live preview</title>
+<link rel="stylesheet" href="../src/panel/panel.css">
+<style>
+/* Preview chrome only — none of this ships. */
+.preview-bar {
+  position: sticky; top: 0; z-index: 30;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--sans); font-size: 12px;
+}
+.preview-bar strong { margin-right: 8px; }
+.preview-bar .spacer { flex: 1; }
+.preview-bar button {
+  font: inherit; padding: 4px 10px; cursor: pointer;
+  border: 1px solid var(--border-strong); border-radius: 2px;
+  background: var(--surface); color: var(--fg);
+}
+.preview-bar button:hover { border-color: var(--accent); color: var(--accent); }
+.preview-bar button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+</style>
+</head>
+<body>
+
+<div class="preview-bar">
+  <strong>Live preview</strong>
+  <span>real panel.js + panel.css, synthetic responses</span>
+  <span class="spacer"></span>
+  <button id="replay">Replay</button>
+  <button data-theme-btn="light" aria-pressed="true">Light</button>
+  <button data-theme-btn="dark" aria-pressed="false">Dark</button>
+</div>
+
+<!-- Mirrors src/panel/panel.html exactly. -->
+<div id="deactivated-banner" class="deactivated-banner" style="display: none;">
+  <div class="deactivated-content">
+    <span class="deactivated-icon">🔌</span>
+    <span id="deactivated-text" class="deactivated-text">MilliCache not detected on this site</span>
+    <button id="activate-btn" class="activate-btn">Activate</button>
+  </div>
+</div>
+<div id="debug-notice" class="debug-notice" style="display: none;">
+  <div class="debug-notice-content">
+    <span class="debug-notice-icon">💡</span>
+    <span class="debug-notice-text">Enable <strong>debug mode</strong> in MilliCache settings to see detailed header information.</span>
+    <button id="dismiss-debug-notice" class="dismiss-btn">×</button>
+  </div>
+</div>
+<div id="log" style="display: none;"><div class="waiting">Waiting for requests…</div></div>
+
+<script>
+/* ==========================================================================
+   Stand in for the DevTools APIs so the real panel.js runs unmodified.
+   Must execute before the deferred module registers its listeners.
+   ========================================================================== */
+const navListeners = [];
+const reqListeners = [];
+const themeListeners = [];
+let previewTheme = "light";
+
+window.browser = {
+  devtools: {
+    panels: {
+      get themeName() { return previewTheme; },
+      onThemeChanged: { addListener: fn => themeListeners.push(fn) }
+    },
+    network: {
+      onNavigated: { addListener: fn => navListeners.push(fn) },
+      onRequestFinished: { addListener: fn => reqListeners.push(fn) }
+    },
+    inspectedWindow: {
+      eval: code => console.log("[preview] inspectedWindow.eval:", code)
+    }
+  }
+};
+
+document.querySelectorAll("[data-theme-btn]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    previewTheme = btn.dataset.themeBtn;
+    themeListeners.forEach(fn => fn(previewTheme));
+    document.querySelectorAll("[data-theme-btn]").forEach(b =>
+      b.setAttribute("aria-pressed", String(b === btn)));
+  });
+});
+</script>
+
+<script type="module" src="../src/panel/panel.js"></script>
+
+<script>
+/* ==========================================================================
+   Synthetic responses, shaped exactly like DevTools HAR entries.
+   ========================================================================== */
+const secondsAgo = s => new Date(Date.now() - s * 1000).toUTCString();
+
+const entry = (url, status, headers, ttfb) => ({
+  request: { url },
+  response: {
+    status,
+    headers: Object.entries(headers).flatMap(([name, value]) =>
+      (Array.isArray(value) ? value : [value]).map(v => ({ name, value: String(v) })))
+  },
+  timings: { wait: ttfb }
+});
+
+const HOME = "https://example.com/";
+
+const SCENARIOS = [
+  // Recorded verbatim from https://www.new7wonders.com/ (bunny.net, 2026-08-12).
+  () => entry("https://www.new7wonders.com/", 200, {
+    "vary": "Accept-Encoding",
+    "server": "BunnyCDN-DE1-1330",
+    "cdn-pullzone": "497808",
+    "age": String(124279 + Math.floor((Date.now() - Date.parse("2026-08-12T09:59:43Z")) / 1000)),
+    "cache-control": "s-maxage=345600",
+    "x-millicache-key": "ddd234412e5b1430fb73675be2b3e0c4",
+    "x-millicache-time": "Mon, 10 Aug 2026 05:55:07 GMT",
+    "x-millicache-flags": "1:home 1:post:37 url:d935766d92008b90e6ad72cb8055ba2a",
+    "x-millicache-expires": "2d 13h 28m 41s",
+    "x-millicache-status": "hit",
+    "cdn-tag": "~1:~1:post:37~1:home~url:d935766d92008b90e6ad72cb8055ba2a~",
+    "cdn-cachedat": "08/11/2026 16:26:26",
+    "cdn-cache": "HIT"
+  }, 21),
+
+  // Recorded verbatim from https://cf.yeyo.org/ (Cloudflare, 2026-08-12): a
+  // stale serve carrying only the site's own max-age.
+  () => entry("https://cf.yeyo.org/", 200, {
+    "server": "cloudflare",
+    "vary": "Accept-Encoding",
+    "x-millicache-key": "253ae0227087e0ebbe8137e3ecc810d7",
+    "x-millicache-time": secondsAgo(103),
+    "x-millicache-flags": "url:231b11192cef3b4a63f5b5b642ca680f home post:9",
+    "x-millicache-expires": "-0d 00h 01m 23s",
+    "x-millicache-status": "stale",
+    "millicache-edge-flags": "post:9,home,url:231b11192cef3b4a63f5b5b642ca680f",
+    "age": "103",
+    "cache-control": "max-age=14400",
+    "cf-cache-status": "EXPIRED",
+    "cf-ray": "a29f3b55bbad68fe-MUC"
+  }, 96),
+
+  // A plain origin miss, so the panel has an origin baseline to compare against.
+  () => entry(HOME, 200, {
+    "X-MilliCache-Status": "miss",
+    "cf-ray": "8f2c1a9b0d3e4f56-FRA",
+    "cf-cache-status": "MISS",
+    "Cache-Control": ["public", "s-maxage=600"]
+  }, 838),
+
+  // Origin hit behind a Cloudflare zone that never caches the HTML.
+  () => entry(HOME, 200, {
+    "X-MilliCache-Status": "hit",
+    "X-MilliCache-Key": "0c41aa9e",
+    "X-MilliCache-Time": secondsAgo(320),
+    "X-MilliCache-Flags": "2:home 2:front url:9d2f",
+    "X-MilliCache-Gzip": "true",
+    "X-MilliCache-Expires": "0d 00h 04m 40s",
+    "cf-ray": "8f2c1a9b0d3e4f56-FRA",
+    "cf-cache-status": "DYNAMIC",
+    "Cache-Control": ["public", "s-maxage=600"],
+    "Age": "320"
+  }, 198),
+
+  // The headline case: bunny.net serving a stored copy. The MilliCache
+  // headers say MISS, but the visitor got an edge hit — origin is omitted.
+  () => entry("https://example.com/2026/08/a-rather-long-post-slug-here/", 200, {
+    "X-MilliCache-Status": "miss",
+    "X-MilliCache-Key": "a91f3c2b",
+    "X-MilliCache-Time": secondsAgo(348),
+    "X-MilliCache-Flags": "2:post:123 2:home 2:archive:post url:1a7c",
+    "X-MilliCache-Expires": "0d 00h 09m 31s",
+    "server": "BunnyCDN-FR1-1057",
+    "cdn-cache": "HIT",
+    "cdn-tag": "~2:~2:post:123~2:home~2:archive:post~",
+    "cdn-cachedat": secondsAgo(348),
+    "Cache-Control": ["public", "s-maxage=600"],
+    "Age": "348"
+  }, 24),
+
+  // Filled from the origin, but two flags never made it into the edge tag.
+  () => entry("https://example.com/shop/", 200, {
+    "X-MilliCache-Status": "miss",
+    "X-MilliCache-Key": "5de88117",
+    "X-MilliCache-Flags": "2:shop 2:product:88 2:archive:product",
+    "server": "BunnyCDN-DE1-882",
+    "cdn-cache": "MISS",
+    "cdn-tag": "~2:~2:shop~"
+  }, 486),
+
+  // Deliberately kept off the edge.
+  () => entry("https://example.com/my-account/", 200, {
+    "X-MilliCache-Status": "bypass",
+    "X-MilliCache-Reason": "Logged-in user",
+    "cf-ray": "8f2c1a9b0d3e4f56-AMS",
+    "cf-cache-status": "BYPASS",
+    "Cache-Control": ["private", "no-store"]
+  }, 412),
+
+  // No CDN at all — the panel must look exactly as it always has.
+  () => entry("https://example.com/about/", 200, {
+    "X-MilliCache-Status": "hit",
+    "X-MilliCache-Key": "31ac9004",
+    "X-MilliCache-Time": secondsAgo(90),
+    "X-MilliCache-Flags": "2:page:12",
+    "X-MilliCache-Gzip": "true",
+    "X-MilliCache-Expires": "0d 00h 12m 10s"
+  }, 19)
+];
+
+function replay() {
+  document.getElementById("log").replaceChildren();
+
+  SCENARIOS.forEach((build, i) => {
+    setTimeout(() => {
+      const request = build();
+      // Every fixture is a top-level document, so tell the panel we navigated
+      // there first — otherwise "bypass" reads as a subresource and is skipped.
+      navListeners.forEach(fn => fn(request.request.url));
+      reqListeners.forEach(fn => fn(request));
+    }, i * 260);
+  });
+}
+
+document.getElementById("replay").addEventListener("click", replay);
+window.addEventListener("load", () => setTimeout(replay, 60));
+
+/* Hooks for driving the panel by hand, from the console or a test:
+     __nav("https://example.com/")     announce a navigation
+     __fire(__entry(url, headers, ttfb))  deliver a response  */
+window.__nav = url => navListeners.forEach(fn => fn(url));
+window.__fire = request => reqListeners.forEach(fn => fn(request));
+window.__entry = entry;
+</script>
+
+</body>
+</html>
