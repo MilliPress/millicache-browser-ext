@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.1](https://github.com/MilliPress/millicache-browser-ext/compare/v1.4.0...v1.4.1) (2026-08-12)
+
+
+### Bug Fixes
+
+* let the Reason tile span the row and wrap ([af0247b](https://github.com/MilliPress/millicache-browser-ext/commit/af0247b4a3a60ebfc4709cb78d93435ebacd14ab))
+* read only s-maxage as the edge lifetime ([c6b9892](https://github.com/MilliPress/millicache-browser-ext/commit/c6b98920f3a0edbada7c1c5a0a073be45ad6a7e4))
+
 ## [1.4.0](https://github.com/MilliPress/millicache-browser-ext/compare/v1.3.1...v1.4.0) (2026-08-12)
 
 

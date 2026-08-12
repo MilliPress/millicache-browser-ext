@@ -1,6 +1,6 @@
 {
   "name": "millicache-headers-inspector",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Inspect MilliCache headers in Firefox DevTools panel",
   "type": "module",
   "scripts": {
