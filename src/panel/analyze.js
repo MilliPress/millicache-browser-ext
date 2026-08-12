@@ -260,17 +260,19 @@ export function buildDiagnostics(origin, edge, isMainDocument) {
     });
   }
 
+  // Not a fault: MilliCache Pro can be told to emit no TTL header and leave
+  // expiry to the zone (the millicache_edge_ttl filter returning 0).
   if (isMainDocument && !edge.isPrivate && edge.sMaxAge === null) {
     notes.push({
-      level: "warn",
-      text: "No s-maxage or max-age on the response, so the zone configuration decides how long the edge keeps this page."
+      level: "info",
+      text: "No s-maxage on the response, so the pull zone's own expiry setting decides how long the edge keeps this page."
     });
   }
 
   if (edge.age !== null && edge.sMaxAge !== null && edge.age > edge.sMaxAge) {
     notes.push({
       level: "warn",
-      text: `The edge copy is ${edge.age - edge.sMaxAge}s past its ${edge.freshnessDirective} and is being served stale.`
+      text: `The edge copy is ${edge.age - edge.sMaxAge}s past its s-maxage and is being served stale.`
     });
   }
 

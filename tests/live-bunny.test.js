@@ -3,9 +3,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { analyze, createState, createHeaderIndex, resolveExpiry } from "../src/panel/analyze.js";
+import { analyze, createState, createHeaderIndex, resolveExpiry, buildDiagnostics } from "../src/panel/analyze.js";
 import { detectEdge } from "../src/panel/providers.js";
 import { BUNNY_EDGE_HIT, toRequest } from "./fixtures.js";
+import * as fixtures from "./fixtures.js";
 
 const edge = () => detectEdge(createHeaderIndex(
   Object.entries(BUNNY_EDGE_HIT.headers).map(([name, value]) => ({ name, value }))
@@ -76,4 +77,23 @@ test("shows the edge alone and dates the entry from an absolute instant", () => 
     BUNNY_EDGE_HIT.storedAt + (((2 * 86400) + (13 * 3600) + (28 * 60) + 41) * 1000),
     "matches what the header claimed at fill time"
   );
+});
+
+test("does not call an edge HIT expired when the zone governs expiry", () => {
+  const { BUNNY_ZONE_GOVERNED } = fixtures;
+  const observed = detectEdge(createHeaderIndex(
+    Object.entries(BUNNY_ZONE_GOVERNED.headers).map(([name, value]) => ({ name, value }))
+  ));
+
+  // max-age=0 is the site's browser directive. The edge ignores it: this copy
+  // had been held for over an hour and was still served as a HIT.
+  assert.equal(observed.status, "hit");
+  assert.equal(observed.sMaxAge, null, "no s-maxage, so no lifetime can be claimed");
+  assert.equal((BUNNY_ZONE_GOVERNED.observedAt - BUNNY_ZONE_GOVERNED.storedAt) / 1000, 4414);
+
+  // With no lifetime there is nothing to be overdue against, so the card cannot
+  // contradict the edge by flipping its headline to EXPIRED.
+  const notes = buildDiagnostics({ reason: "", flags: [] }, observed, true);
+  assert.equal(notes.some(n => /past its s-maxage/.test(n.text)), false);
+  assert.ok(notes.some(n => n.level === "info" && /pull zone's own expiry/.test(n.text)));
 });

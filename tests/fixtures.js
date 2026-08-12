@@ -97,6 +97,38 @@ export const CLOUDFLARE_FRESH = {
 };
 
 /**
+ * bunny.net edge HIT on a zone whose own expiry setting governs, from
+ * https://www.meggle-group.com/qualitaet on 2026-08-12.
+ *
+ * No s-maxage: MilliCache is leaving edge expiry to the zone. The `max-age=0`
+ * alongside is the site's browser directive, and the edge plainly ignores it,
+ * serving a copy it had held for over an hour. Treating max-age as the edge
+ * lifetime made the panel call this expired while the edge called it a HIT.
+ */
+export const BUNNY_ZONE_GOVERNED = {
+  headers: {
+    "date": "Wed, 12 Aug 2026 13:22:12 GMT",
+    "content-type": "text/html; charset=UTF-8",
+    "vary": "Accept-Encoding",
+    "server": "BunnyCDN-DE1-1328",
+    "cdn-pullzone": "1573383",
+    "age": "14703",
+    "cache-control": "public, max-age=0",
+    "x-millicache-status": "hit",
+    "x-millicache-key": "9279229e14da3481e572cedb61d18c75",
+    "x-millicache-time": "Wed, 12 Aug 2026 08:03:35 GMT",
+    "x-millicache-flags": "2:post:841 url:402630030786194565387116b9613da3",
+    "x-millicache-expires": "0d 19h 54m 57s",
+    "cdn-tag": "~2:~2:post:841~url:402630030786194565387116b9613da3~",
+    "cdn-cachedat": "08/12/2026 12:08:38",
+    "cdn-cache": "HIT",
+    "cdn-status": "200"
+  },
+  observedAt: Date.parse("Wed, 12 Aug 2026 13:22:12 GMT"),
+  storedAt: Date.UTC(2026, 7, 12, 12, 8, 38)
+};
+
+/**
  * @param {object} fixture One of the exports above.
  * @param {string} url Request URL.
  * @param {number} ttfb Time to first byte in ms.

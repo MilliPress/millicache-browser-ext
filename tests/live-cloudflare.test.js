@@ -39,28 +39,23 @@ test("treats EXPIRED as origin-served, and the headers prove it", () => {
   assert.equal(edgeOf(CLOUDFLARE_FRESH).age, 4);
 });
 
-test("falls back to max-age when the Tagger sent no s-maxage", () => {
-  // A stale serve carries only the site's own max-age; a shared cache honours
-  // it, so it is the lifetime the edge is applying.
+test("reads only s-maxage as the edge lifetime", () => {
+  // The stale serve carries max-age=14400, yet the request 5s later was still
+  // EXPIRED rather than a four-hour HIT: Cloudflare was not honouring it.
   const stale = edgeOf(CLOUDFLARE_STALE);
-  assert.equal(stale.sMaxAge, 14400);
-  assert.equal(stale.freshnessDirective, "max-age");
+  assert.equal(stale.sMaxAge, null, "max-age is the browser directive, not the edge's");
 
-  // s-maxage wins wherever it is present, even alongside a longer max-age.
   const fresh = edgeOf(CLOUDFLARE_FRESH);
-  assert.equal(fresh.sMaxAge, 20);
-  assert.equal(fresh.freshnessDirective, "s-maxage");
+  assert.equal(fresh.sMaxAge, 20, "s-maxage wins, even beside a much longer max-age");
 });
 
-test("does not warn about a missing lifetime when max-age supplies one", () => {
-  const stale = edgeOf(CLOUDFLARE_STALE);
-  const notes = buildDiagnostics({ reason: "", flags: [] }, stale, true);
+test("notes, without alarm, that the zone governs expiry", () => {
+  const notes = buildDiagnostics({ reason: "", flags: [] }, edgeOf(CLOUDFLARE_STALE), true);
+  const note = notes.find(n => /pull zone's own expiry/.test(n.text));
 
-  assert.equal(
-    notes.some(note => /No s-maxage or max-age/.test(note.text)),
-    false,
-    "max-age governs the edge here, so the response is not unbounded"
-  );
+  // Emitting no TTL header is a supported setup, not a misconfiguration.
+  assert.ok(note);
+  assert.equal(note.level, "info");
 });
 
 test("reads the tags Host CDN compatibility mode lets through", () => {

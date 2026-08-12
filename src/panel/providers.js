@@ -194,33 +194,26 @@ const GENERIC = {
 export const PROVIDERS = [CLOUDFLARE, BUNNY, GENERIC];
 
 /**
- * How long a shared cache may hold this response.
+ * How long MilliCache asked the edge to keep this response.
  *
- * `s-maxage` wins where present, and `max-age` is the fallback a shared cache
- * uses otherwise (RFC 9111). Reading only s-maxage would miss the lifetime the
- * edge is really applying: MilliCache Pro's Tagger emits s-maxage only for
- * responses it wants stored, while the site's own max-age rides along on the
- * rest, and the edge honours whichever it is given.
+ * `s-maxage` only. RFC 9111 lets a shared cache fall back to `max-age`, but in
+ * practice a CDN's own zone expiry overrides it, so it does not describe what
+ * the edge will do: a bunny.net zone was observed serving a HIT it had held for
+ * over an hour behind `max-age=0`, and a Cloudflare zone expiring an object
+ * seconds after sending `max-age=14400`. Absent s-maxage the zone configuration
+ * governs, which is not visible from here and must not be guessed at.
  *
  * Scans every Cache-Control line, since the Tagger appends rather than replaces.
  *
  * @param {object} index Header index.
- * @returns {{seconds: number|null, directive: string}}
+ * @returns {number|null} Seconds, or null when the origin set no shared lifetime.
  */
-function readSharedFreshness(index) {
-  let maxAge = null;
-
+function readSMaxAge(index) {
   for (const value of index.getAll("cache-control")) {
-    const shared = value.match(/s-maxage\s*=\s*(\d+)/i);
-    if (shared) return { seconds: parseInt(shared[1], 10), directive: "s-maxage" };
-
-    const own = value.match(/(?:^|[,;\s])max-age\s*=\s*(\d+)/i);
-    if (own && maxAge === null) maxAge = parseInt(own[1], 10);
+    const match = value.match(/s-maxage\s*=\s*(\d+)/i);
+    if (match) return parseInt(match[1], 10);
   }
-
-  return maxAge !== null
-    ? { seconds: maxAge, directive: "max-age" }
-    : { seconds: null, directive: "" };
+  return null;
 }
 
 /**
@@ -267,7 +260,7 @@ export function detectEdge(index) {
     ? parseInt(ageHeader, 10)
     : null;
 
-  const freshness = readSharedFreshness(index);
+  const sMaxAge = readSMaxAge(index);
 
   if (!provider) {
     return {
@@ -278,8 +271,7 @@ export function detectEdge(index) {
       originFresh: true,
       pop: "",
       age,
-      sMaxAge: freshness.seconds,
-      freshnessDirective: freshness.directive,
+      sMaxAge,
       isPrivate: readPrivate(index),
       vary: readVary(index),
       tags: [],
@@ -298,8 +290,7 @@ export function detectEdge(index) {
     originFresh: provider.originFresh(status),
     pop: provider.pop(index),
     age,
-    sMaxAge: freshness.seconds,
-    freshnessDirective: freshness.directive,
+    sMaxAge,
     isPrivate: readPrivate(index),
     vary: readVary(index),
     tags: provider.tags(index).filter(isContentFlag),

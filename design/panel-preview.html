@@ -144,6 +144,24 @@ const SCENARIOS = [
     "cf-ray": "a29f3b55bbad68fe-MUC"
   }, 96),
 
+  // Recorded from https://www.meggle-group.com/qualitaet (bunny.net, 2026-08-12):
+  // no s-maxage, so the pull zone's own setting governs edge expiry.
+  () => entry("https://www.meggle-group.com/qualitaet", 200, {
+    "vary": "Accept-Encoding",
+    "server": "BunnyCDN-DE1-1328",
+    "cdn-pullzone": "1573383",
+    "age": "14703",
+    "cache-control": "public, max-age=0",
+    "x-millicache-status": "hit",
+    "x-millicache-key": "9279229e14da3481e572cedb61d18c75",
+    "x-millicache-time": secondsAgo(19107),
+    "x-millicache-flags": "2:post:841 url:402630030786194565387116b9613da3",
+    "x-millicache-expires": "0d 19h 54m 57s",
+    "cdn-tag": "~2:~2:post:841~url:402630030786194565387116b9613da3~",
+    "cdn-cachedat": new Date(Date.now() - 4414000).toISOString().replace(/(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2}:\d{2}).*/, "$2/$3/$1 $4"),
+    "cdn-cache": "HIT"
+  }, 18),
+
   // A plain origin miss, so the panel has an origin baseline to compare against.
   () => entry(HOME, 200, {
     "X-MilliCache-Status": "miss",
