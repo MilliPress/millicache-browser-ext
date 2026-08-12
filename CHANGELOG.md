@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/MilliPress/millicache-browser-ext/compare/v1.3.1...v1.4.0) (2026-08-12)
+
+
+### Features
+
+* support Edge Cache on Cloudflare and bunny.net ([07cb085](https://github.com/MilliPress/millicache-browser-ext/commit/07cb0853e2546daa76d4f46837a258265aeca4b3))
+
 ## [1.3.1](https://github.com/MilliPress/millicache-browser-ext/compare/v1.3.0...v1.3.1) (2025-12-17)
 
 
