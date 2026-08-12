@@ -1,6 +1,42 @@
+/**
+ * DevTools panel rendering. Owns the DOM, animations and UI state; header
+ * interpretation lives in analyze.js.
+ *
+ * A card answers two questions: is this page cached, and where. When the edge
+ * served the response its status is the whole answer, since the MilliCache
+ * headers alongside are a replay of the fill request. Origin values are shown
+ * only when the origin produced the response.
+ */
+
+import { analyze, createState } from "./analyze.js";
+
+/**
+ * Mirror the DevTools theme onto the document. `prefers-color-scheme` reports
+ * the OS theme, not the DevTools theme, so only themeName is reliable here.
+ */
+function trackDevToolsTheme() {
+  const panels = browser.devtools.panels;
+
+  const apply = theme => {
+    document.documentElement.dataset.theme = theme === "dark" ? "dark" : "light";
+  };
+
+  if (panels && typeof panels.themeName === "string") {
+    apply(panels.themeName);
+  }
+
+  // Missing in older supported Firefox versions; the CSS then falls back.
+  if (panels && panels.onThemeChanged) {
+    panels.onThemeChanged.addListener(apply);
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+  trackDevToolsTheme();
+
   const log = document.getElementById("log");
   const deactivatedBanner = document.getElementById("deactivated-banner");
+  const deactivatedText = document.getElementById("deactivated-text");
   const activateBtn = document.getElementById("activate-btn");
   const debugNotice = document.getElementById("debug-notice");
   const dismissDebugNoticeBtn = document.getElementById("dismiss-debug-notice");
@@ -12,55 +48,65 @@ document.addEventListener("DOMContentLoaded", () => {
   let debugNoticeDismissed = false;
   let hasShownDebugNotice = false;
 
-  // Retention settings
   const ENTRY_LIFETIME_MS = 60000;
   const MIN_ENTRIES_KEPT = 5;
 
-  // Track last navigated URL for reload vs navigate detection
+  // For reload vs navigate detection.
   let lastNavigatedUrl = null;
 
-  // Track last status per URL for transition badges
-  const urlStatusCache = new Map();
+  const analyzerState = createState();
 
-  // Track MISS TTFB for comparison with HITs
-  const missTtfbCache = new Map();
-
-  // Track cards by URL for reuse
   const cardsByUrl = new Map();
 
   function navigateToUrl(url) {
     browser.devtools.inspectedWindow.eval(`window.location.href = ${JSON.stringify(url)}`);
   }
 
-  // Global countdown timer - all countdowns update together
-  const countdownElements = new Set();
+  // One clock for every live figure, so they stay in step.
+  const tickers = new Set();
   setInterval(() => {
-    countdownElements.forEach(item => {
-      if (!item.element.isConnected) {
-        countdownElements.delete(item);
+    tickers.forEach(ticker => {
+      if (!ticker.element.isConnected) {
+        tickers.delete(ticker);
         return;
       }
-      const remaining = item.targetTime - Date.now();
-      item.element.textContent = formatCountdown(remaining);
-      item.badge.style.display = remaining <= 0 ? "inline" : "none";
+      ticker.update();
     });
   }, 1000);
 
-  // Activate button click handler
+  /**
+   * @param {HTMLElement} element Element to update, and to watch for removal.
+   * @param {Function} update Called once per second.
+   */
+  function addTicker(element, update) {
+    update();
+    tickers.add({ element, update });
+  }
+
   activateBtn.addEventListener("click", () => {
     isDeactivated = false;
     deactivatedBanner.style.display = "none";
     log.style.display = "flex";
   });
 
-  // Dismiss debug notice
   dismissDebugNoticeBtn.addEventListener("click", () => {
     debugNoticeDismissed = true;
     debugNotice.style.display = "none";
   });
 
-  function showDeactivatedState() {
+  /**
+   * @param {string} lead Bolded opening sentence.
+   * @param {string} detail Supporting sentence.
+   * @param {boolean} isEdge Whether an edge is standing in for the origin.
+   */
+  function showDeactivatedState(lead, detail, isEdge) {
     isDeactivated = true;
+
+    const strong = document.createElement("strong");
+    strong.textContent = lead;
+    deactivatedText.replaceChildren(strong, document.createTextNode(" " + detail));
+
+    deactivatedBanner.classList.toggle("is-edge", Boolean(isEdge));
     deactivatedBanner.style.display = "block";
     log.style.display = "none";
   }
@@ -104,26 +150,17 @@ document.addEventListener("DOMContentLoaded", () => {
     if (lastSeparator) lastSeparator.remove();
 
     const wrapper = document.createElement("div");
-    wrapper.className = pendingSeparator.isReload ? "separator reloaded" : "separator navigated";
+    wrapper.className = "separator";
     lastSeparator = wrapper;
 
-    const hr = document.createElement("hr");
-    const label = document.createElement("div");
+    const label = document.createElement("span");
     label.className = "separator-label";
+    label.textContent = pendingSeparator.isReload
+      ? `↺ Reloaded at ${pendingSeparator.time}`
+      : `→ Navigated at ${pendingSeparator.time}`;
 
-    const iconSpan = document.createElement("span");
-    iconSpan.className = "separator-icon";
-    iconSpan.textContent = pendingSeparator.isReload ? "↺" : "→";
-
-    const action = pendingSeparator.isReload ? " Reloaded" : " Navigated";
-
-    label.appendChild(iconSpan);
-    label.appendChild(document.createTextNode(`${action} at ${pendingSeparator.time}`));
-
-    wrapper.appendChild(hr);
     wrapper.appendChild(label);
 
-    // Insert after card using nextSibling to ensure correct placement
     const nextSibling = card.nextSibling;
     if (nextSibling) {
       log.insertBefore(wrapper, nextSibling);
@@ -142,489 +179,727 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function getTransitionLabel(prevStatus, newStatus) {
-    const prev = prevStatus.toLowerCase();
-    const next = newStatus.toLowerCase();
-    if (prev === "miss" && next === "hit") return "cached";
-    if (prev === "hit" && next === "stale") return "expired";
-    if (prev === "hit" && next === "miss") return "cleared";
-    if (prev === "stale" && next === "hit") return "regenerated";
-    if (prev === "miss" && next === "stale") return "stale";
-    return null;
-  }
-
-  function formatTime(ms) {
-    if (ms < 1000) {
-      return `${Math.round(ms)} ms`;
-    } else {
-      return `${(ms / 1000).toFixed(2)} s`;
-    }
-  }
-
-  function parseExpiresValue(expires) {
-    const regex = /(?:(-)?(\d+)d\s*)?(?:(\d+)h\s*)?(?:(\d+)m\s*)?(?:(\d+)s)?/;
-    const match = expires.match(regex);
-
-    if (match) {
-      const isNegative = match[1] === "-";
-      const days = parseInt(match[2] || 0, 10);
-      const hours = parseInt(match[3] || 0, 10);
-      const minutes = parseInt(match[4] || 0, 10);
-      const seconds = parseInt(match[5] || 0, 10);
-
-      const totalSeconds = (days * 86400) + (hours * 3600) + (minutes * 60) + seconds;
-      const signedSeconds = isNegative ? -totalSeconds : totalSeconds;
-
-      return Date.now() + (signedSeconds * 1000);
-    }
-
-    const num = parseInt(expires, 10);
-    if (!isNaN(num)) {
-      return Date.now() + (num * 1000);
-    }
-
-    return null;
-  }
+  // ============================================================================
+  // Formatting
+  // ============================================================================
 
   function formatCountdown(remainingMs) {
     const isNegative = remainingMs < 0;
-    const absMs = Math.abs(remainingMs);
-
-    const totalSeconds = Math.floor(absMs / 1000);
+    const totalSeconds = Math.floor(Math.abs(remainingMs) / 1000);
     const days = Math.floor(totalSeconds / 86400);
     const hours = Math.floor((totalSeconds % 86400) / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
 
-    const pad = (n) => n.toString().padStart(2, '0');
-    const prefix = isNegative ? "-" : "";
+    const pad = n => n.toString().padStart(2, "0");
 
-    return `${prefix}${days}d ${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`;
+    return `${isNegative ? "-" : ""}${days}d ${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`;
+  }
+
+  /** Short human duration for inline meta ("4m 12s", "3d 6h"). */
+  function formatShortDuration(seconds) {
+    const abs = Math.abs(seconds);
+    if (abs < 60) return `${abs}s`;
+    if (abs < 3600) return `${Math.floor(abs / 60)}m ${abs % 60}s`;
+    if (abs < 86400) return `${Math.floor(abs / 3600)}h ${Math.floor((abs % 3600) / 60)}m`;
+    return `${Math.floor(abs / 86400)}d ${Math.floor((abs % 86400) / 3600)}h`;
   }
 
   // ============================================================================
-  // Block-based UI creation helpers
+  // Building blocks
   // ============================================================================
 
-  // Icon map for labels
-  const labelIcons = {
-    "TTFB": "⚡",
-    "Status": "💾",
-    "Reason": "💬",
-    "Expires": "⏳",
-    "Flags": "🏷",
-    "Time": "🕑",
-    "Key": "🔑",
-    "Gzip": "🗜️",
-    "Savings": "📉"
-  };
+  /**
+   * Write a measurement as a large number with the unit set back.
+   *
+   * @param {HTMLElement} valueEl Target element.
+   * @param {number} ms Duration in milliseconds.
+   */
+  function fillDuration(valueEl, ms) {
+    const unit = document.createElement("small");
+    const figure = ms < 1000 ? String(Math.round(ms)) : (ms / 1000).toFixed(2);
+    unit.textContent = ms < 1000 ? "ms" : "s";
 
-  function createInfoRow(label, value, isEssential = false) {
-    const row = document.createElement("div");
-    row.className = isEssential ? "info-row essential" : "info-row";
-
-    const labelEl = document.createElement("span");
-    labelEl.className = "info-label";
-    const icon = labelIcons[label] || "";
-    labelEl.textContent = icon ? `${icon} ${label}` : label;
-
-    const valueEl = document.createElement("span");
-    valueEl.className = "info-value";
-    valueEl.textContent = value;
-
-    row.appendChild(labelEl);
-    row.appendChild(valueEl);
-
-    return row;
+    // Appended, not assigned: callers may have placed a prefix.
+    valueEl.appendChild(document.createTextNode(figure));
+    valueEl.appendChild(unit);
   }
 
-  function createStatusRow(status, transitionLabel) {
-    const row = document.createElement("div");
-    row.className = "info-row essential";
+  /**
+   * A status pill; unknown statuses fall back to the neutral colour.
+   *
+   * @param {string} status Cache status.
+   * @returns {HTMLElement}
+   */
+  function createStatusPill(status) {
+    const known = ["hit", "miss", "stale", "bypass", "dynamic", "expired"];
+    const value = status.toLowerCase();
 
-    const labelEl = document.createElement("span");
-    labelEl.className = "info-label";
-    labelEl.textContent = "💾 Status";
+    const pill = document.createElement("span");
+    pill.className = `pill pill--status s-${known.includes(value) ? value : "none"}`;
+    pill.textContent = status.toUpperCase();
 
-    const valueEl = document.createElement("span");
-    valueEl.className = "info-value";
+    return pill;
+  }
 
-    const badge = document.createElement("span");
-    badge.className = "status-badge " + status.toLowerCase();
+  /**
+   * Flip the headline pill to EXPIRED once the cached copy lapses. The delivery
+   * box still records what was served at request time.
+   *
+   * @param {HTMLElement} card The card element.
+   * @param {string} detail What expired, for the tooltip.
+   */
+  function markCardExpired(card, detail) {
+    const pill = card.querySelector(".card-header .pill--status");
+    if (!pill || pill.dataset.expired === "true") return;
 
-    const dot = document.createElement("span");
-    dot.className = "status-dot";
-    dot.textContent = "●";
+    const served = pill.textContent;
+    pill.dataset.expired = "true";
+    pill.className = "pill pill--status s-expired";
+    pill.textContent = "EXPIRED";
+    pill.title = `Served as ${served}; ${detail}`;
+  }
 
-    badge.appendChild(dot);
-    badge.appendChild(document.createTextNode(" " + status.toUpperCase()));
-    valueEl.appendChild(badge);
+  /**
+   * One hop in the delivery chain.
+   *
+   * @param {string} layer Layer name ("Edge" / "Origin").
+   * @param {string} status Cache status for that layer.
+   * @param {string} meta Supporting detail.
+   * @param {string} transitionLabel Optional change badge.
+   * @returns {HTMLElement}
+   */
+  function createHop(layer, status, meta, transitionLabel) {
+    const hop = document.createElement("div");
+    hop.className = "hop";
+
+    const layerEl = document.createElement("span");
+    layerEl.className = "hop__layer";
+    layerEl.textContent = layer;
+    hop.appendChild(layerEl);
+
+    hop.appendChild(createStatusPill(status));
 
     if (transitionLabel) {
-      const transitionBadge = document.createElement("span");
-      transitionBadge.className = "transition-badge";
-      transitionBadge.textContent = transitionLabel;
-      valueEl.appendChild(transitionBadge);
+      const badge = document.createElement("span");
+      badge.className = "pill pill--transition";
+      badge.textContent = transitionLabel;
+      hop.appendChild(badge);
     }
 
-    row.appendChild(labelEl);
-    row.appendChild(valueEl);
+    if (meta instanceof HTMLElement) {
+      hop.appendChild(meta);
+    } else if (meta) {
+      const metaEl = document.createElement("span");
+      metaEl.className = "hop__meta";
+      metaEl.textContent = meta;
+      hop.appendChild(metaEl);
+    }
 
-    return row;
+    return hop;
   }
 
-  function createExpiresRow(expires) {
-    const row = document.createElement("div");
-    row.className = "info-row essential";
-
-    const labelEl = document.createElement("span");
-    labelEl.className = "info-label";
-    labelEl.textContent = "⏳ Expires";
-
-    const valueEl = document.createElement("span");
-    valueEl.className = "info-value";
-
-    const countdownSpan = document.createElement("span");
-    countdownSpan.className = "expires-countdown";
-    valueEl.appendChild(countdownSpan);
-
-    const expiredBadge = document.createElement("span");
-    expiredBadge.className = "expired-badge";
-    expiredBadge.textContent = "expired";
-    expiredBadge.style.display = "none";
-    valueEl.appendChild(expiredBadge);
-
-    row.appendChild(labelEl);
-    row.appendChild(valueEl);
-
-    const targetTime = parseExpiresValue(expires);
-
-    if (targetTime === null) {
-      countdownSpan.textContent = expires;
-      return row;
-    }
-
-    // Initial display
-    const remaining = targetTime - Date.now();
-    countdownSpan.textContent = formatCountdown(remaining);
-    expiredBadge.style.display = remaining <= 0 ? "inline" : "none";
-
-    // Register with global countdown timer
-    countdownElements.add({
-      element: countdownSpan,
-      badge: expiredBadge,
-      targetTime: targetTime
-    });
-
-    return row;
+  /**
+   * When the edge took delivery. bunny.net reports it directly and is the only
+   * trustworthy source there, replaying the origin's Age verbatim rather than
+   * adding its own resident time; elsewhere Age is all there is.
+   *
+   * @param {object} edge Edge observation.
+   * @returns {number|null} Epoch ms, or null when undeterminable.
+   */
+  function edgeStoredAt(edge) {
+    if (edge.cachedAt !== null) return edge.cachedAt;
+    return edge.age !== null ? Date.now() - (edge.age * 1000) : null;
   }
 
-  function createFlagsRow(flags) {
-    const row = document.createElement("div");
-    row.className = "info-row essential";
+  /**
+   * How long the edge copy stays fresh. The expiry that matters once the edge
+   * answered, since the origin's entry may have been regenerated since the fill
+   * without the edge knowing.
+   *
+   * @param {object} edge Edge observation.
+   * @param {HTMLElement} card Card to mark expired when the copy lapses.
+   * @returns {HTMLElement|null}
+   */
+  function createEdgeExpiresMetric(edge, card) {
+    const storedAt = edgeStoredAt(edge);
+    if (storedAt === null || edge.sMaxAge === null) return null;
 
-    const labelEl = document.createElement("span");
-    labelEl.className = "info-label";
-    labelEl.textContent = "🏷 Flags";
+    const { cell, valueEl } = createMetric("Edge expires", "is-mono");
+    const expiresAt = storedAt + (edge.sMaxAge * 1000);
 
-    const valueEl = document.createElement("span");
-    valueEl.className = "info-value";
+    addTicker(valueEl, () => {
+      const remaining = Math.round((expiresAt - Date.now()) / 1000);
+      valueEl.textContent = remaining > 0
+        ? formatShortDuration(remaining)
+        : `${formatShortDuration(remaining)} overdue`;
+      valueEl.classList.toggle("is-slow", remaining <= 0);
 
-    const pillsContainer = document.createElement("div");
-    pillsContainer.className = "pills";
-
-    flags.forEach(f => {
-      const pill = document.createElement("span");
-      pill.className = "pill";
-      pill.textContent = f;
-      pill.title = "Click to copy";
-      pill.addEventListener("click", (e) => {
-        e.stopPropagation();
-        navigator.clipboard.writeText(f).then(() => {
-          const originalText = pill.textContent;
-          pill.textContent = "Copied!";
-          setTimeout(() => {
-            pill.textContent = originalText;
-          }, 1000);
-        });
-      });
-      pillsContainer.appendChild(pill);
-    });
-
-    valueEl.appendChild(pillsContainer);
-    row.appendChild(labelEl);
-    row.appendChild(valueEl);
-
-    return row;
-  }
-
-  function createSavingsRow(savingsData) {
-    const row = document.createElement("div");
-    row.className = "info-row";
-
-    const labelEl = document.createElement("span");
-    labelEl.className = "info-label";
-    labelEl.textContent = "📉 Savings";
-
-    const valueEl = document.createElement("span");
-    valueEl.className = "info-value savings-value";
-
-    const mainLine = document.createElement("div");
-    mainLine.className = "savings-main";
-
-    const arrow = savingsData.timeSaved >= 0 ? "↓" : "↑";
-    const absTimeSaved = Math.abs(savingsData.timeSaved);
-    mainLine.textContent = `${arrow} ${Math.round(absTimeSaved)}ms faster`;
-
-    const percentSpan = document.createElement("span");
-    percentSpan.className = "savings-percent";
-    percentSpan.textContent = ` (${savingsData.percentSaved}%)`;
-    mainLine.appendChild(percentSpan);
-
-    const compLine = document.createElement("div");
-    compLine.className = "savings-comparison";
-    compLine.textContent = `MISS: ${Math.round(savingsData.missTtfb)}ms → HIT: ${Math.round(savingsData.hitTtfb)}ms`;
-
-    valueEl.appendChild(mainLine);
-    valueEl.appendChild(compLine);
-    row.appendChild(labelEl);
-    row.appendChild(valueEl);
-
-    return row;
-  }
-
-  function buildCardContent(data) {
-    const content = document.createElement("div");
-    content.className = "card-content";
-
-    // TTFB
-    if (data.ttfb !== null && data.ttfb !== undefined) {
-      content.appendChild(createInfoRow("TTFB", formatTime(data.ttfb), false));
-    }
-
-    // Status (essential)
-    if (data.status) {
-      content.appendChild(createStatusRow(data.status, data.transitionLabel));
-    }
-
-    // Reason
-    if (data.reason) {
-      content.appendChild(createInfoRow("Reason", data.reason));
-    }
-
-    // Expires (essential)
-    if (data.expires) {
-      content.appendChild(createExpiresRow(data.expires));
-    }
-
-    // Flags (essential)
-    if (data.flags && data.flags.length) {
-      content.appendChild(createFlagsRow(data.flags));
-    }
-
-    // Time
-    if (data.time) {
-      content.appendChild(createInfoRow("Time", data.time));
-    }
-
-    // Key
-    if (data.key) {
-      content.appendChild(createInfoRow("Key", data.key));
-    }
-
-    // Gzip
-    if (data.gzip) {
-      content.appendChild(createInfoRow("Gzip", data.gzip));
-    }
-
-    // Savings
-    if (data.ttfbSavings) {
-      content.appendChild(createSavingsRow(data.ttfbSavings));
-    }
-
-    return content;
-  }
-
-  function extractHeaderData(milliHeaders) {
-    const data = {
-      flags: [],
-      key: "",
-      time: "",
-      gzip: "",
-      reason: "",
-      expires: ""
-    };
-
-    milliHeaders.forEach(h => {
-      const name = h.name.toLowerCase().replace("x-millicache-", "");
-      const value = h.value;
-      switch (name) {
-        case "key": data.key = value; break;
-        case "time": data.time = value; break;
-        case "flags": data.flags = value.split(" ").filter(f => !f.startsWith("url:")); break;
-        case "gzip": data.gzip = value === "true" ? "Enabled" : "Disabled"; break;
-        case "reason": data.reason = value; break;
-        case "expires": data.expires = value; break;
+      // Past s-maxage the next request refetches, so the headline says expired.
+      if (remaining <= 0 && card) {
+        markCardExpired(card, "the edge copy has passed its freshness lifetime since.");
       }
     });
 
-    return data;
+    return cell;
+  }
+
+  /**
+   * How old the page the visitor received is, counting up. The full RFC 7231
+   * date stays in the tooltip.
+   *
+   * @param {string} value X-MilliCache-Time value.
+   * @returns {HTMLElement}
+   */
+  function createWrittenMetric(value) {
+    const { cell, valueEl } = createMetric("Written", "is-mono");
+    const writtenAt = Date.parse(value);
+
+    if (Number.isNaN(writtenAt)) {
+      valueEl.textContent = value;
+      return cell;
+    }
+
+    valueEl.title = value;
+    addTicker(valueEl, () => {
+      const age = Math.round((Date.now() - writtenAt) / 1000);
+      valueEl.textContent = age > 0 ? `${formatShortDuration(age)} ago` : "just now";
+    });
+
+    return cell;
+  }
+
+  /**
+   * How long the edge has held this copy, when no s-maxage sizes it.
+   *
+   * @param {object} edge Edge observation.
+   * @returns {HTMLElement|null}
+   */
+  function createEdgeAgeMetric(edge) {
+    const storedAt = edgeStoredAt(edge);
+    if (storedAt === null || edge.sMaxAge !== null) return null;
+
+    const { cell, valueEl } = createMetric("At edge", "is-mono");
+
+    addTicker(valueEl, () => {
+      valueEl.textContent = formatShortDuration(Math.round((Date.now() - storedAt) / 1000));
+    });
+
+    return cell;
+  }
+
+  /**
+   * Who answered this request, and from where.
+   *
+   * @param {object} observation Analyzed request.
+   * @returns {HTMLElement}
+   */
+  function createDeliveryBox(observation, card) {
+    const { edge, origin, servedBy } = observation;
+
+    const box = document.createElement("div");
+    box.className = "delivery";
+
+    const header = document.createElement("div");
+    header.className = "delivery__header";
+
+    // A miss and a bypass are distinct states with distinct fixes, so each is
+    // named rather than lumped together as "not cached".
+    const passedThrough = `the ${edge.providerName} edge passed this through`;
+    let keyword;
+    let summary;
+
+    if (servedBy === "edge") {
+      keyword = edge.status === "hit" ? "Cached" : edge.status;
+      summary = `at the ${edge.providerName} edge`;
+    } else if (origin.statusValue === "bypass") {
+      keyword = "Bypass";
+      summary = `not cacheable (${passedThrough})`;
+    } else if (origin.statusValue === "miss") {
+      keyword = "Miss";
+      summary = `generated at the origin (${passedThrough})`;
+    } else if (origin.statusValue === "stale") {
+      keyword = "Stale";
+      summary = `served stale while it regenerates (${passedThrough})`;
+    } else {
+      keyword = "Cached";
+      summary = `at the origin (${passedThrough})`;
+    }
+
+    const kw = document.createElement("span");
+    kw.className = "delivery__kw";
+    kw.textContent = keyword.toUpperCase();
+    header.appendChild(kw);
+
+    const summaryEl = document.createElement("span");
+    summaryEl.textContent = summary;
+    header.appendChild(summaryEl);
+    box.appendChild(header);
+
+    const body = document.createElement("div");
+    body.className = "delivery__body";
+
+    const chain = document.createElement("div");
+    chain.className = "chain";
+
+    if (edge.detected) {
+      // Where, only; how long it stays fresh is a KPI tile.
+      chain.appendChild(createHop(
+        "Edge",
+        edge.status || "unknown",
+        [edge.providerName, edge.pop].filter(Boolean).join(" · "),
+        null
+      ));
+    }
+
+    if (servedBy === "origin") {
+      chain.appendChild(createHop(
+        "Origin",
+        origin.status,
+        edge.detected ? "MilliCache" : "",
+        observation.transitionLabel
+      ));
+    }
+
+    body.appendChild(chain);
+    box.appendChild(body);
+
+    return box;
+  }
+
+  // Must match .metrics in panel.css.
+  const TILE_MIN_WIDTH = 150;
+  const TILE_GAP = 8;
+
+  /**
+   * Column count that never leaves one tile alone on the last row: four tiles
+   * in a three-wide space lay out 2/2, not 3/1. CSS cannot express this, since
+   * `auto-fill` fixes the track count from the width alone.
+   *
+   * @param {HTMLElement} grid The metrics grid.
+   */
+  function layoutMetrics(grid) {
+    const count = grid.children.length;
+    const width = grid.clientWidth;
+
+    // Zero while collapsed; the observer re-runs on open.
+    if (!count || !width) return;
+
+    const fits = Math.floor((width + TILE_GAP) / (TILE_MIN_WIDTH + TILE_GAP));
+    let columns = Math.max(1, fits);
+
+    // Only when the tiles wrap, and never below two, which would stretch each
+    // tile across the full width.
+    while (columns > 2 && count > columns && count % columns === 1) {
+      columns--;
+    }
+
+    grid.style.gridTemplateColumns = `repeat(${columns}, minmax(0, 1fr))`;
+  }
+
+  const metricsObserver = new ResizeObserver(entries => {
+    entries.forEach(entry => layoutMetrics(entry.target));
+  });
+
+  /**
+   * @param {string} label Cell label.
+   * @param {string} modifier Extra class for the value element.
+   * @returns {{cell: HTMLElement, valueEl: HTMLElement}}
+   */
+  // What each tile means, shown behind the info marker on its label.
+  const METRIC_HELP = {
+    "TTFB": "Time to first byte: how long the server took to start sending this response.",
+    "Savings": "How much faster this response was than the last MISS for the same URL.",
+    "Edge saved": "How much faster the edge answered than the origin did for this URL.",
+    "Expires": "When the cached entry expires and MilliCache regenerates it.",
+    "Edge expires": "When the edge copy stops being fresh, so the next request makes the edge refetch it.",
+    "At edge": "How long the edge has held this copy. The response set no lifetime, so the zone governs when it expires.",
+    "Written": "When the page you received was generated at the origin.",
+    "Key": "The key MilliCache stored this entry under.",
+    "Gzip": "Whether the stored entry is compressed.",
+    "Reason": "Why MilliCache made this cache decision."
+  };
+
+  function createMetric(label, modifier = "") {
+    const cell = document.createElement("div");
+    cell.className = "metric";
+
+    const labelEl = document.createElement("span");
+    labelEl.className = "metric__label";
+    labelEl.appendChild(document.createTextNode(label));
+
+    const help = METRIC_HELP[label];
+    if (help) {
+      const info = document.createElement("span");
+      info.className = "metric__info";
+      info.textContent = "ⓘ";
+      info.title = help;
+      labelEl.appendChild(info);
+    }
+
+    const valueEl = document.createElement("span");
+    valueEl.className = `metric__value ${modifier}`.trim();
+
+    cell.appendChild(labelEl);
+    cell.appendChild(valueEl);
+
+    return { cell, valueEl };
+  }
+
+  /**
+   * A metric cell holding a live countdown.
+   *
+   * @param {object} expiry Resolved expiry from the analyzer.
+   * @param {HTMLElement} card Card to mark expired when it lapses.
+   * @returns {HTMLElement}
+   */
+  function createExpiresMetric(expiry, card) {
+    const { cell, valueEl } = createMetric("Expires", "is-mono");
+
+    if (expiry.targetTime === undefined || expiry.targetTime === null) {
+      valueEl.textContent = expiry.text;
+      return cell;
+    }
+
+    // Age bundles origin age with edge residence, so this is a lower bound.
+    const prefix = expiry.approximate ? "≈ " : "";
+    if (expiry.approximate) {
+      valueEl.title = "Approximate: derived from the Age header, so the real remaining lifetime is a little longer.";
+    }
+
+    addTicker(valueEl, () => {
+      const remaining = expiry.targetTime - Date.now();
+      valueEl.textContent = prefix + formatCountdown(remaining);
+
+      if (remaining <= 0 && card) {
+        markCardExpired(card, "the cached entry has expired since.");
+      }
+    });
+
+    return cell;
+  }
+
+  /**
+   * Timings first, then entry facts when they are live.
+   *
+   * @param {object} observation Analyzed request.
+   * @param {HTMLElement} card Owning card.
+   * @returns {HTMLElement|null}
+   */
+  /**
+   * @param {HTMLElement} element Click target.
+   * @param {string} value Value to copy.
+   */
+  function makeCopyable(element, value) {
+    element.classList.add("is-copyable");
+    element.title = `${value}\nClick to copy`;
+
+    element.addEventListener("click", event => {
+      event.stopPropagation();
+      navigator.clipboard.writeText(value).then(() => {
+        const original = element.textContent;
+        element.textContent = "Copied!";
+        setTimeout(() => { element.textContent = original; }, 1000);
+      });
+    });
+  }
+
+  function createMetrics(observation, card) {
+    const { origin, servedBy, savings } = observation;
+    const cells = [];
+
+    // Coloured only at the ends of the range.
+    if (observation.ttfb !== null && observation.ttfb !== undefined) {
+      let modifier = "is-hero";
+      if (observation.ttfb < 100) modifier += " is-good";
+      else if (observation.ttfb >= 800) modifier += " is-slow";
+
+      const { cell, valueEl } = createMetric("TTFB", modifier);
+      fillDuration(valueEl, observation.ttfb);
+      cells.push(cell);
+    }
+
+    [
+      { data: savings.edge, label: "Edge saved", from: "origin", to: "edge" },
+      { data: savings.origin, label: "Savings", from: "MISS", to: "HIT" }
+    ].forEach(({ data, label, from, to }) => {
+      if (!data) return;
+
+      const { cell, valueEl } = createMetric(label, "is-hero is-good");
+
+      const arrow = document.createElement("span");
+      arrow.className = "metric__arrow";
+      arrow.textContent = data.timeSaved >= 0 ? "↓" : "↑";
+      valueEl.appendChild(arrow);
+
+      fillDuration(valueEl, Math.abs(data.timeSaved));
+
+      const sub = document.createElement("span");
+      sub.className = "metric__sub";
+      sub.textContent = `${from} ${Math.round(data.missTtfb)} → ${to} ${Math.round(data.hitTtfb)}`;
+      valueEl.appendChild(sub);
+
+      cells.push(cell);
+    });
+
+    // "Written" still holds on an edge hit: it dates the bytes the visitor
+    // received. The origin's expiry does not, so it is not claimed here.
+    if (servedBy === "edge") {
+      [
+        createEdgeExpiresMetric(observation.edge, card),
+        createEdgeAgeMetric(observation.edge)
+      ].forEach(cell => cell && cells.push(cell));
+
+      if (origin.time) {
+        cells.push(createWrittenMetric(origin.time));
+      }
+    }
+
+    // Entry facts are live only when the origin answered.
+    if (servedBy === "origin") {
+      if (observation.expiry) {
+        cells.push(createExpiresMetric(observation.expiry, card));
+      }
+
+      if (origin.time) {
+        cells.push(createWrittenMetric(origin.time));
+      }
+
+      [
+        { label: "Reason", value: origin.reason, modifier: "is-plain" },
+        // Long hashes: truncated, with the full value copied on click.
+        { label: "Key", value: origin.key, modifier: "is-mono", copyable: true },
+        { label: "Gzip", value: origin.gzip === null ? "" : (origin.gzip ? "Enabled" : "Disabled"), modifier: "is-plain" }
+      ].forEach(({ label, value, title, modifier, copyable }) => {
+        if (!value) return;
+
+        const { cell, valueEl } = createMetric(label, modifier);
+        valueEl.textContent = value;
+        valueEl.title = title || value;
+
+        if (copyable) {
+          makeCopyable(valueEl, value);
+        }
+
+        cells.push(cell);
+      });
+    }
+
+    if (!cells.length) return null;
+
+    const grid = document.createElement("div");
+    grid.className = "metrics";
+    cells.forEach(cell => grid.appendChild(cell));
+    metricsObserver.observe(grid);
+
+    return grid;
+  }
+
+  /**
+   * A row of copyable tag pills.
+   *
+   * @param {string} label Row label.
+   * @param {Array<string>} tags Tags to render.
+   * @param {Array<string>|null} presentAt Tags known to be at the edge; any
+   *   missing tag is marked, since it cannot be purged there.
+   * @returns {HTMLElement}
+   */
+  function createTagsRow(label, tags, presentAt) {
+    const row = document.createElement("div");
+    row.className = "tags";
+
+    const labelEl = document.createElement("span");
+    labelEl.className = "tags__label";
+    labelEl.textContent = label;
+
+    const list = document.createElement("span");
+    list.className = "tags__list";
+
+    tags.forEach(tag => {
+      const pill = document.createElement("span");
+      pill.className = "pill pill--code pill--tag";
+      pill.textContent = tag;
+
+      if (presentAt && !presentAt.includes(tag)) {
+        pill.classList.add("is-missing");
+        pill.title = "Not present in the edge tag, so a flag purge will not clear this page at the edge.";
+      } else {
+        pill.title = "Click to copy";
+      }
+
+      pill.addEventListener("click", event => {
+        event.stopPropagation();
+        navigator.clipboard.writeText(tag).then(() => {
+          const original = pill.textContent;
+          pill.textContent = "Copied!";
+          setTimeout(() => { pill.textContent = original; }, 1000);
+        });
+      });
+
+      list.appendChild(pill);
+    });
+
+    row.appendChild(labelEl);
+    row.appendChild(list);
+
+    return row;
+  }
+
+  /**
+   * @param {Array<{level: string, text: string}>} diagnostics Analyzer notes.
+   * @returns {HTMLElement}
+   */
+  function createNotes(diagnostics) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "notes";
+
+    // No icon: the coloured left edge already separates a warning from a note.
+    diagnostics.forEach(note => {
+      const line = document.createElement("div");
+      line.className = `note note--${note.level}`;
+      line.textContent = note.text;
+      wrapper.appendChild(line);
+    });
+
+    return wrapper;
+  }
+
+  function buildCardContent(observation, card) {
+    const { origin, edge, servedBy } = observation;
+
+    const content = document.createElement("div");
+    content.className = "card-content";
+
+    // Without a CDN there is one layer, already named by the header pill.
+    if (edge.detected) {
+      content.appendChild(createDeliveryBox(observation, card));
+    }
+
+    const metrics = createMetrics(observation, card);
+    if (metrics) content.appendChild(metrics);
+
+    // Origin flags are live only when the origin answered; edge tags are stored
+    // with the object, so they are accurate either way.
+    if (servedBy === "origin" && origin.flags.length) {
+      content.appendChild(createTagsRow("Flags", origin.flags, edge.tags.length ? edge.tags : null));
+    }
+
+    if (edge.tags.length) {
+      content.appendChild(createTagsRow("Edge tags", edge.tags, null));
+    }
+
+    if (observation.diagnostics.length) {
+      content.appendChild(createNotes(observation.diagnostics));
+    }
+
+    return content;
   }
 
   // ============================================================================
   // Card creation and update
   // ============================================================================
 
-  function updateExistingCard(card, request, milliHeaders, status, ttfb, ttfbSavings) {
-    const requestUrl = request.request.url;
-
-    // Keep compact for now, will expand after moving
-    card.classList.add("compact");
-    card.classList.remove("highlight");
-    card.setAttribute("data-status", status.toLowerCase());
-
-    // Update HTTP status
-    const httpStatusEl = card.querySelector(".http-status");
-    if (httpStatusEl) {
-      const httpStatus = request.response.status;
-      httpStatusEl.setAttribute("data-code", httpStatus);
-      httpStatusEl.textContent = httpStatus;
-    }
-
-    // Get transition label
-    const prevStatus = urlStatusCache.get(requestUrl);
-    const transitionLabel = prevStatus ? getTransitionLabel(prevStatus, status) : null;
-    urlStatusCache.set(requestUrl, status.toLowerCase());
-
-    // Extract header data
-    const headerData = extractHeaderData(milliHeaders);
-
-    // Replace card content
-    const oldContent = card.querySelector(".card-content");
-    if (oldContent) oldContent.remove();
-
-    const newContent = buildCardContent({
-      ...headerData,
-      status,
-      ttfb,
-      ttfbSavings,
-      transitionLabel
+  /** Collapse every card except the one passed in. */
+  function collapseOthers(current) {
+    log.querySelectorAll(".entry-card").forEach(card => {
+      if (card === current) return;
+      card.classList.remove("is-current", "is-open");
     });
-    card.appendChild(newContent);
-
-    // Compact all other cards instantly (no transition)
-    const existingCards = log.querySelectorAll(".entry-card");
-    existingCards.forEach(existingCard => {
-      if (existingCard !== card) {
-        existingCard.style.transition = "none";
-        existingCard.classList.remove("highlight");
-        existingCard.classList.add("compact");
-        existingCard.offsetHeight; // Force reflow
-        existingCard.style.transition = "";
-      }
-    });
-
-    // Move to top (disable default slide-in, use flash instead)
-    card.style.animation = "none";
-    log.prepend(card);
-    insertPendingSeparatorAfter(card);
-
-    // Force reflow then apply flash animation
-    card.offsetHeight;
-    card.classList.add("flash");
-
-    // Then expand the card
-    requestAnimationFrame(() => {
-      card.classList.remove("compact");
-      card.classList.add("highlight");
-    });
-
-    // Clean up flash class after animation completes
-    card.addEventListener("animationend", () => {
-      card.classList.remove("flash");
-      card.style.animation = "";
-    }, { once: true });
   }
 
-  function createMilliEntry(request, milliHeaders, status, ttfb, ttfbSavings) {
-    const requestUrl = request.request.url;
-
-    // Reuse existing card if one exists for this URL
-    const existingCard = cardsByUrl.get(requestUrl);
-    if (existingCard && existingCard.isConnected) {
-      updateExistingCard(existingCard, request, milliHeaders, status, ttfb, ttfbSavings);
-      return;
-    }
-
-    // Get transition label
-    const prevStatus = urlStatusCache.get(requestUrl);
-    const transitionLabel = prevStatus ? getTransitionLabel(prevStatus, status) : null;
-    urlStatusCache.set(requestUrl, status.toLowerCase());
-
-    // Create card (starts compact, will be expanded after prepending)
-    const card = document.createElement("div");
-    card.className = "entry-card compact";
-    card.setAttribute("data-status", status.toLowerCase());
-
-    // Card header
+  function buildCardHeader(observation) {
     const header = document.createElement("div");
     header.className = "card-header";
 
+    header.appendChild(createStatusPill(observation.effectiveStatus));
+
+    // The heading stretches so the text can truncate, but only the text
+    // navigates; the space beside it falls through to the header's toggle.
     const urlEl = document.createElement("h3");
     urlEl.className = "card-url";
-    urlEl.textContent = requestUrl;
 
-    const httpStatusEl = document.createElement("span");
-    httpStatusEl.className = "http-status";
-    httpStatusEl.setAttribute("data-code", request.response.status);
-    httpStatusEl.textContent = request.response.status;
+    const link = document.createElement("bdi");
+    link.className = "card-url__link";
+    link.textContent = observation.url;
+    link.title = "Open this URL in the inspected tab";
+    link.addEventListener("click", event => {
+      event.stopPropagation();
+      navigateToUrl(observation.url);
+    });
 
+    urlEl.appendChild(link);
     header.appendChild(urlEl);
-    header.appendChild(httpStatusEl);
-    card.appendChild(header);
 
-    // Extract header data
-    const headerData = extractHeaderData(milliHeaders);
+    if (observation.diagnostics.some(note => note.level === "warn")) {
+      const warn = document.createElement("span");
+      warn.className = "card-warning";
+      warn.textContent = "⚠";
+      warn.title = "This request has configuration warnings";
+      header.appendChild(warn);
+    }
 
-    // Build card content
-    const content = buildCardContent({
-      ...headerData,
-      status,
-      ttfb,
-      ttfbSavings,
-      transitionLabel
+
+    const httpStatus = document.createElement("span");
+    httpStatus.className = "pill pill--http";
+    httpStatus.textContent = observation.httpStatus;
+    header.appendChild(httpStatus);
+
+    const time = document.createElement("span");
+    time.className = "card-time";
+    time.textContent = new Date().toLocaleTimeString();
+    header.appendChild(time);
+
+    return header;
+  }
+
+  /**
+   * @param {HTMLElement} element Target.
+   * @param {string} className One-shot animation class, restarted if applied.
+   */
+  function playOnce(element, className) {
+    element.classList.remove(className);
+    element.offsetHeight; // Reflow, so re-adding restarts the animation.
+    element.classList.add(className);
+    element.addEventListener("animationend", () => element.classList.remove(className), { once: true });
+  }
+
+  function updateExistingCard(card, observation) {
+    card.replaceChildren(buildCardHeader(observation), buildCardContent(observation, card));
+
+    collapseOthers(card);
+    card.classList.add("is-current", "is-open");
+
+    log.prepend(card);
+    insertPendingSeparatorAfter(card);
+    playOnce(card, "flash");
+  }
+
+  function createMilliEntry(observation) {
+    const requestUrl = observation.url;
+
+    const existingCard = cardsByUrl.get(requestUrl);
+    if (existingCard && existingCard.isConnected) {
+      updateExistingCard(existingCard, observation);
+      return;
+    }
+
+    const card = document.createElement("div");
+    card.className = "entry-card is-current is-open is-new";
+    card.addEventListener("animationend", () => card.classList.remove("is-new"), { once: true });
+    card.appendChild(buildCardHeader(observation));
+    card.appendChild(buildCardContent(observation, card));
+
+    // The header toggles detail; the URL inside it navigates instead.
+    card.querySelector(".card-header").addEventListener("click", () => {
+      card.classList.toggle("is-open");
     });
-    card.appendChild(content);
 
-    // Click handler
-    card.addEventListener("click", () => {
-      navigateToUrl(requestUrl);
-    });
-
-    // Track card
     cardsByUrl.set(requestUrl, card);
 
-    // Compact all existing cards instantly (no transition)
-    const existingCards = log.querySelectorAll(".entry-card");
-    existingCards.forEach(existingCard => {
-      existingCard.style.transition = "none";
-      existingCard.classList.remove("highlight");
-      existingCard.classList.add("compact");
-      existingCard.offsetHeight; // Force reflow
-      existingCard.style.transition = "";
-    });
-
-    // Add to log (compact)
+    collapseOthers(card);
     log.prepend(card);
     insertPendingSeparatorAfter(card);
 
-    // Then expand the new card (grows into view)
-    requestAnimationFrame(() => {
-      card.classList.remove("compact");
-      card.classList.add("highlight");
-    });
-
-    // Auto-remove after lifetime
     setTimeout(() => {
       const entries = log.querySelectorAll(".entry-card");
       if (entries.length > MIN_ENTRIES_KEPT) {
@@ -643,20 +918,29 @@ document.addEventListener("DOMContentLoaded", () => {
   // ============================================================================
 
   browser.devtools.network.onRequestFinished.addListener((request) => {
-    const url = new URL(request.request.url);
-    if (/favicon\.ico([?#].*)?$/.test(url.pathname)) {
-      return;
-    }
+    const observation = analyze(request, analyzerState, { lastNavigatedUrl });
+    if (!observation) return;
 
-    const headers = request.response.headers;
-    const statusHeader = headers.find(h => h.name.toLowerCase() === "x-millicache-status");
+    if (observation.verdict === "no-millicache") {
+      if (observation.isMainDocument && !hasSeenMilliCacheOnSite && !isDeactivated) {
+        // Behind a CDN this means the edge is replaying a copy stored without
+        // them, not that MilliCache is absent.
+        const edge = observation.edge;
+        const servedByEdge = edge.detected && edge.originFresh === false;
 
-    // Check if this is the main document by comparing with the last navigated URL
-    const isMainDocument = lastNavigatedUrl && request.request.url === lastNavigatedUrl;
-
-    if (!statusHeader) {
-      if (isMainDocument && !hasSeenMilliCacheOnSite && !isDeactivated) {
-        showDeactivatedState();
+        if (servedByEdge) {
+          showDeactivatedState(
+            `Served from the ${edge.providerName} edge.`,
+            "This stored copy carries no MilliCache headers. Purge the zone to re-fill it.",
+            true
+          );
+        } else {
+          showDeactivatedState(
+            "MilliCache not detected on this site.",
+            "No X-MilliCache headers on the document.",
+            false
+          );
+        }
       }
       return;
     }
@@ -667,58 +951,14 @@ document.addEventListener("DOMContentLoaded", () => {
       showActivatedState();
     }
 
-    const statusVal = statusHeader?.value?.toLowerCase() || '';
-    if (!(["hit", "miss", "stale"].includes(statusVal) || (statusVal === "bypass" && isMainDocument))) {
-      return;
-    }
+    if (observation.verdict !== "render") return;
 
-    const milliHeaders = headers.filter(h =>
-      h.name.toLowerCase().startsWith("x-millicache-")
-    );
-
-    const hasDebugHeaders = milliHeaders.some(h => {
-      const name = h.name.toLowerCase();
-      return name !== "x-millicache-status" &&
-             (name === "x-millicache-key" ||
-              name === "x-millicache-time" ||
-              name === "x-millicache-flags" ||
-              name === "x-millicache-gzip" ||
-              name === "x-millicache-reason" ||
-              name === "x-millicache-expires");
-    });
-
-    if (milliHeaders.length === 1 && statusHeader && !hasDebugHeaders && statusVal !== "miss") {
+    if (observation.debugNotice === "show") {
       showDebugNotice();
-    } else if (hasDebugHeaders) {
+    } else if (observation.debugNotice === "hide") {
       hideDebugNotice();
     }
 
-    const ttfb = request.timings?.wait;
-    const cacheKey = request.request.url;
-
-    let ttfbSavings = null;
-
-    if (statusVal === "miss" && ttfb !== null && ttfb !== undefined) {
-      missTtfbCache.set(cacheKey, {
-        ttfb: ttfb,
-        url: request.request.url,
-        timestamp: Date.now()
-      });
-    } else if ((statusVal === "hit" || statusVal === "stale") && ttfb !== null && ttfb !== undefined && missTtfbCache.has(cacheKey)) {
-      const missData = missTtfbCache.get(cacheKey);
-      const timeSaved = missData.ttfb - ttfb;
-      const percentSaved = missData.ttfb > 0 ? Math.round((timeSaved / missData.ttfb) * 100) : 0;
-
-      ttfbSavings = {
-        timeSaved: timeSaved,
-        percentSaved: percentSaved,
-        missTtfb: missData.ttfb,
-        hitTtfb: ttfb
-      };
-    }
-
-    if (milliHeaders.length) {
-      createMilliEntry(request, milliHeaders, statusHeader.value, ttfb, ttfbSavings);
-    }
+    createMilliEntry(observation);
   });
 });

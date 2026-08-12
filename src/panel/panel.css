@@ -1,457 +1,101 @@
-* {
-  box-sizing: border-box;
-}
+/**
+ * MilliCache DevTools panel.
+ *
+ * Follows MilliCache Pro's settings UI (_rules.scss): WP admin colours, cards
+ * with a gray header bar, one shared pill spec for every tag and badge.
+ *
+ * Themed on the data-theme attribute, which panel.js sets from
+ * devtools.panels.themeName; prefers-color-scheme is only a fallback, since it
+ * reports the OS theme rather than the DevTools theme.
+ */
 
 :root {
-  --primary-color: #3858E9;
-  --primary-light: #eef0fc;
-  --primary-dark: #2e4bcc;
-  --success-color: #10b981;
-  --success-light: #ecfdf5;
-  --error-color: #ef4444;
-  --error-light: #fef2f2;
-  --warning-color: #f59e0b;
-  --warning-light: #fffbeb;
-  --info-color: #3b82f6;
-  --info-light: #eff6ff;
-  --gray-50: #f9fafb;
-  --gray-100: #f3f4f6;
-  --gray-200: #e5e7eb;
-  --gray-300: #d1d5db;
-  --gray-400: #9ca3af;
-  --gray-500: #6b7280;
-  --gray-600: #4b5563;
-  --gray-700: #374151;
-  --gray-800: #1f2937;
-  --gray-900: #111827;
+  --accent: #2271b1;
+  --fg: #1d2327;
+  --fg-2: #50575e;
+  --fg-3: #a7aaad;
+  --border: #dcdcde;
+  --border-strong: #c3c4c7;
+  --surface: #fff;
+  --surface-2: #f6f7f7;
+  --canvas: #f0f0f1;
+
+  --hit: #007017;      --hit-bg: #edf7ee;
+  --miss: #b32d2e;     --miss-bg: #fce8e8;
+  --stale: #8a6116;    --stale-bg: #fcf3e4;
+  --bypass: #2271b1;   --bypass-bg: #e6f0fa;
+  --none: #50575e;     --none-bg: #f0f0f1;
+
+  --mono: Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --accent: #4f94d4;
+    --fg: #e2e4e7;
+    --fg-2: #a7aaad;
+    --fg-3: #787c82;
+    --border: #3c434a;
+    --border-strong: #4f5661;
+    --surface: #23282d;
+    --surface-2: #2c3338;
+    --canvas: #1d2327;
+
+    --hit: #68de7c;    --hit-bg: #1c3524;
+    --miss: #f86368;   --miss-bg: #3d1f21;
+    --stale: #f0c33c;  --stale-bg: #3a2f14;
+    --bypass: #4f94d4; --bypass-bg: #1c3a52;
+    --none: #a7aaad;   --none-bg: #2c3338;
+  }
+}
+
+:root[data-theme="dark"] {
+  --accent: #4f94d4;
+  --fg: #e2e4e7;
+  --fg-2: #a7aaad;
+  --fg-3: #787c82;
+  --border: #3c434a;
+  --border-strong: #4f5661;
+  --surface: #23282d;
+  --surface-2: #2c3338;
+  --canvas: #1d2327;
+
+  --hit: #68de7c;    --hit-bg: #1c3524;
+  --miss: #f86368;   --miss-bg: #3d1f21;
+  --stale: #f0c33c;  --stale-bg: #3a2f14;
+  --bypass: #4f94d4; --bypass-bg: #1c3a52;
+  --none: #a7aaad;   --none-bg: #2c3338;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
   padding: 0;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  background-color: var(--gray-100);
-  color: var(--gray-900);
-  font-size: 14px;
+  font-family: var(--sans);
+  font-size: 13px;
   line-height: 1.5;
+  background: var(--canvas);
+  color: var(--fg);
 }
 
 #log {
-  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
+  padding: 14px;
   max-width: 1000px;
   margin: 0 auto;
 }
 
-/* ==========================================================================
-   Entry Card
-   ========================================================================== */
-
-.entry-card {
-  position: relative;
-  background: white;
-  border: 1px solid var(--gray-200);
-  border-left: 4px solid var(--gray-400);
-  padding: 0.75rem 1rem;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-  cursor: pointer;
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    border-left-color 0.3s ease,
-    padding 0.25s ease,
-    background 0.3s ease;
-  animation: cardSlideIn 0.3s ease-out;
-}
-
-@keyframes cardSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.entry-card:hover {
-  box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.1);
-}
-
-.entry-card.removing {
-  animation: cardSlideOut 0.3s ease-in forwards;
-}
-
-@keyframes cardSlideOut {
-  from { opacity: 1; }
-  to { opacity: 0; }
-}
-
-/* Highlight flash when existing card moves to top */
-.entry-card.flash {
-  animation: highlightFlash 0.6s ease-out;
-}
-
-@keyframes highlightFlash {
-  0% {
-    box-shadow: 0 0 0 0 rgba(56, 88, 233, 0.4);
-  }
-  50% {
-    box-shadow: 0 0 15px 3px rgba(56, 88, 233, 0.3);
-  }
-  100% {
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-  }
-}
-
-/* Highlight state (newest card) */
-.entry-card.highlight {
-  background: rgba(56, 88, 233, 0.05);
-  padding: 1rem;
-}
-
-/* Status-based border colors - when highlighted or hovered */
-.entry-card[data-status="hit"].highlight,
-.entry-card[data-status="hit"]:hover {
-  border-left-color: var(--success-color);
-}
-.entry-card[data-status="miss"].highlight,
-.entry-card[data-status="miss"]:hover {
-  border-left-color: var(--error-color);
-}
-.entry-card[data-status="bypass"].highlight,
-.entry-card[data-status="bypass"]:hover {
-  border-left-color: var(--info-color);
-}
-.entry-card[data-status="stale"].highlight,
-.entry-card[data-status="stale"]:hover {
-  border-left-color: var(--warning-color);
-}
-
-/* ==========================================================================
-   Card Header
-   ========================================================================== */
-
-.card-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-  transition: margin 0.25s ease;
-}
-
-.entry-card.compact .card-header {
-  margin-bottom: 0.25rem;
-}
-
-.entry-card.compact:hover .card-header {
-  margin-bottom: 0.5rem;
-}
-
-.card-url {
-  flex: 1;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--gray-800);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin: 0;
-  transition: font-size 0.25s ease;
-}
-
-
-.http-status {
-  font-size: 0.7rem;
-  padding: 0.15rem 0.4rem;
-  background-color: var(--gray-100);
-  color: var(--gray-600);
-  font-weight: 500;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  border-radius: 2px;
-}
-
-.http-status[data-code^="2"] {
-  background-color: var(--success-light);
-  color: var(--success-color);
-}
-.http-status[data-code^="3"] {
-  background-color: var(--warning-light);
-  color: var(--warning-color);
-}
-.http-status[data-code^="4"],
-.http-status[data-code^="5"] {
-  background-color: var(--error-light);
-  color: var(--error-color);
-}
-
-/* ==========================================================================
-   Card Content (Info Rows)
-   ========================================================================== */
-
-.card-content {
-  display: flex;
-  flex-direction: column;
-}
-
-.info-row {
-  display: flex;
-  align-items: baseline;
-  gap: 1rem;
-  padding: 0.5rem 0.25rem;
-  border-bottom: 1px solid var(--gray-300);
-  overflow: hidden;
-  transition:
-    max-height 0.25s ease,
-    opacity 0.25s ease,
-    padding 0.25s ease,
-    border-color 0.25s ease;
-}
-
-.info-row:last-child {
-  border-bottom: none;
-}
-
-.info-label {
-  flex-shrink: 0;
-  width: 100px;
-  color: var(--gray-500);
-}
-
-.info-value {
-  flex: 1;
-  color: var(--gray-800);
-  font-weight: 500;
-}
-
-/* Compact mode */
-
-
-.entry-card.compact .info-row:not(.essential) {
-  max-height: 0;
-  opacity: 0;
-  padding: 0;
-  border-bottom: none;
-  pointer-events: none;
-}
-
-.entry-card.compact:hover .info-row:not(.essential) {
-  max-height: 50px;
-  opacity: 1;
-  padding: 0.5rem 0.25rem;
-  pointer-events: auto;
-}
-
-.entry-card.compact:hover .info-row:not(:last-child) {
-  border-bottom: 1px solid var(--gray-300);
-}
-
-/* ==========================================================================
-   Status Badge
-   ========================================================================== */
-
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-weight: 600;
-  font-size: 0.8rem;
-}
-
-.status-dot {
-  font-size: 0.6rem;
-}
-
-.status-badge.hit { color: var(--success-color); }
-.status-badge.hit .status-dot { color: var(--success-color); }
-
-.status-badge.miss { color: var(--error-color); }
-.status-badge.miss .status-dot { color: var(--error-color); }
-
-.status-badge.stale { color: var(--warning-color); }
-.status-badge.stale .status-dot { color: var(--warning-color); }
-
-.status-badge.bypass { color: var(--info-color); }
-.status-badge.bypass .status-dot { color: var(--info-color); }
-
-/* Transition badge */
-.transition-badge {
-  margin-left: 0.5rem;
-  font-size: 0.65rem;
-  padding: 0.15rem 0.4rem;
-  background-color: var(--gray-100);
-  color: var(--gray-500);
-  font-weight: 500;
-  border-radius: 3px;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-
-/* Expired badge - only visible when card is highlighted */
-.expired-badge {
-  margin-left: 0.5rem;
-  font-size: 0.65rem;
-  padding: 0.15rem 0.4rem;
-  background-color: var(--error-light);
-  color: var(--error-color);
-  font-weight: 500;
-  border-radius: 3px;
-  text-transform: uppercase;
-}
-
-.entry-card.compact .expired-badge {
-  visibility: hidden;
-}
-
-.entry-card.compact:hover .expired-badge {
-  visibility: visible;
-}
-
-/* ==========================================================================
-   Pills (Flags)
-   ========================================================================== */
-
-.pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.pill {
-  display: inline-block;
-  background-color: var(--primary-light);
-  color: var(--primary-dark);
-  font-weight: 500;
-  border-radius: 9999px;
-  padding: 0.2rem 0.6rem;
-  font-size: 0.7rem;
-  cursor: pointer;
-  transition: background-color 0.15s, transform 0.1s;
-  user-select: none;
-}
-
-.pill:hover {
-  background-color: var(--primary-color);
-  color: white;
-}
-
-.pill:active {
-  background-color: var(--primary-color);
-}
-
-/* ==========================================================================
-   Expires Countdown
-   ========================================================================== */
-
-.expires-countdown {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.8rem;
-}
-
-/* ==========================================================================
-   Savings Row
-   ========================================================================== */
-
-.savings-value {
-  color: var(--success-color);
-}
-
-.savings-main {
-  font-weight: 600;
-  margin-bottom: 0.15rem;
-}
-
-.savings-percent {
-  font-size: 0.8rem;
-  opacity: 0.85;
-}
-
-.savings-comparison {
-  font-size: 0.7rem;
-  color: var(--gray-500);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
-
-/* ==========================================================================
-   Separator
-   ========================================================================== */
-
-.separator {
-  position: relative;
-  margin: 1rem 0;
-  text-align: center;
-  animation: separatorFadeIn 0.4s ease-out;
-}
-
-@keyframes separatorFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.separator-icon {
-  display: inline-block;
-}
-
-.separator.navigated .separator-icon {
-  animation: slideInFromLeft 0.4s ease-out;
-}
-
-.separator.reloaded .separator-icon {
-  animation: rotateIn 0.5s ease-out;
-}
-
-@keyframes slideInFromLeft {
-  from {
-    opacity: 0;
-    transform: translateX(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes rotateIn {
-  from {
-    opacity: 0;
-    transform: rotate(180deg);
-  }
-  to {
-    opacity: 1;
-    transform: rotate(0deg);
-  }
-}
-
-.separator hr {
-  border: 0;
-  height: 1px;
-  background-color: var(--gray-200);
-  margin: 0;
-}
-
-.separator-label {
-  position: absolute;
-  top: -0.6rem;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: var(--gray-100);
-  padding: 0 0.6rem;
-  font-size: 0.7rem;
-  color: var(--gray-500);
-}
-
-/* ==========================================================================
-   Waiting State
-   ========================================================================== */
-
 .waiting {
-  color: var(--gray-500);
+  color: var(--fg-3);
   text-align: center;
-  font-size: 1rem;
-  margin-top: 3rem;
+  font-size: 13px;
+  margin-top: 2.5rem;
   animation: pulse 1.5s ease-in-out infinite;
 }
 
@@ -462,213 +106,551 @@ body {
 }
 
 /* ==========================================================================
-   Banners & Notices
+   Pills — one shared spec, colour is the only variable
    ========================================================================== */
 
-.deactivated-banner {
-  background: var(--gray-200);
-  border-bottom: 1px solid var(--gray-300);
-  padding: 1rem;
-  text-align: center;
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+  border: 1px solid transparent;
 }
 
-.deactivated-content {
+.pill--status {
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.pill--code {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--fg);
+}
+
+.pill--http {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--fg-2);
+}
+
+.pill--transition {
+  background: var(--none-bg);
+  border-color: var(--none-bg);
+  color: var(--fg-2);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.s-hit    { background: var(--hit-bg);    color: var(--hit);    border-color: var(--hit-bg); }
+.s-miss   { background: var(--miss-bg);   color: var(--miss);   border-color: var(--miss-bg); }
+.s-stale  { background: var(--stale-bg);  color: var(--stale);  border-color: var(--stale-bg); }
+.s-bypass { background: var(--bypass-bg); color: var(--bypass); border-color: var(--bypass-bg); }
+.s-none,
+.s-dynamic { background: var(--none-bg);  color: var(--none);   border-color: var(--none-bg); }
+.s-expired { background: var(--stale-bg); color: var(--stale);  border-color: var(--stale-bg); }
+
+/* ==========================================================================
+   Card
+   ========================================================================== */
+
+.entry-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+/* One-shot, never on the base class: a permanent animation property replays
+   whenever another class stops overriding it. */
+.entry-card.is-new {
+  animation: cardSlideIn 0.25s ease-out;
+}
+
+.entry-card.is-current {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.entry-card.removing {
+  animation: cardSlideOut 0.3s ease-in forwards;
+}
+
+.entry-card.flash {
+  animation: highlightFlash 0.6s ease-out;
+}
+
+@keyframes cardSlideIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes cardSlideOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes highlightFlash {
+  0% { box-shadow: 0 0 0 0 rgba(34, 113, 177, 0.45); }
+  50% { box-shadow: 0 0 12px 2px rgba(34, 113, 177, 0.3); }
+  100% { box-shadow: 0 0 0 1px var(--accent); }
+}
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+
+.card-header {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.entry-card.is-open .card-header {
+  border-bottom: 1px solid var(--border);
+}
+
+.card-url {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* Truncate from the left so the meaningful end of the path stays visible. */
+  direction: rtl;
+  text-align: left;
+}
+
+/* Only the text navigates; the space beside it toggles the card. */
+.card-url__link {
+  direction: ltr;
+  cursor: pointer;
+}
+
+.card-url__link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.card-warning {
+  color: var(--stale);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.card-time {
+  font-size: 11px;
+  color: var(--fg-3);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* ── Body ───────────────────────────────────────────────────────────── */
+
+.card-content {
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+
+.entry-card.is-open .card-content {
+  display: flex;
+}
+
+/* ── Delivery box ───────────────────────────────────────────────────── */
+
+.delivery {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.delivery__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--fg-2);
+}
+
+.delivery__kw {
+  padding: 1px 7px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.delivery__body {
+  padding: 8px 12px;
+}
+
+/* Hop chain, mirroring the Rules UI condition tree. */
+.chain {
+  position: relative;
+  padding-left: 16px;
+}
+
+.hop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 4px 0;
+  position: relative;
+  font-size: 12px;
+  color: var(--fg-2);
+}
+
+.hop::before {
+  content: "";
+  position: absolute;
+  left: -16px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+}
+
+.hop::after {
+  content: "";
+  position: absolute;
+  left: -16px;
+  top: 50%;
+  width: 12px;
+  height: 2px;
+  background: var(--border);
+  border-radius: 1px;
+}
+
+.hop:last-child::before { bottom: 50%; }
+.hop:only-child::before { top: 0; bottom: 50%; }
+
+.hop__layer {
+  width: 56px;
+  flex-shrink: 0;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-3);
+}
+
+.hop__meta {
+  font-size: 11px;
+  color: var(--fg-3);
+}
+
+.hop__meta .is-stale {
+  color: var(--stale);
+}
+
+/* ── Metrics ────────────────────────────────────────────────────────── */
+
+/* KPI tiles, every one the same width whatever the count. `auto-fill` rather
+   than `auto-fit` or flex: those stretch leftover tiles to soak up free space,
+   turning a lone tile into a full-width banner. Keeping the empty tracks leaves
+   the remainder of the last row empty instead. */
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.metric {
+  min-width: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.metric__label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-2);
+}
+
+.metric__info {
+  cursor: help;
+  opacity: 0.5;
+  font-size: 10px;
+}
+
+.metric__info:hover {
+  opacity: 1;
+}
+
+.metric__value {
+  /* Block, so overflow and ellipsis apply to a long cache key. */
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metric__value.is-copyable {
+  cursor: pointer;
+}
+
+.metric__value.is-copyable:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.metric__value.is-mono { font-family: var(--mono); font-size: 12px; }
+.metric__value.is-plain { font-weight: 400; font-size: 12px; }
+.metric__value.is-good { color: var(--hit); }
+.metric__value.is-slow { color: var(--stale); }
+
+/* Headline figures: large number, unit set back. */
+.metric__value.is-hero {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.metric__value.is-hero small {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--fg-3);
+  margin-left: 2px;
+  letter-spacing: 0;
+}
+
+.metric__arrow {
+  font-size: 18px;
+  margin-right: 1px;
+}
+
+.metric__sub {
+  display: block;
+  margin-top: 1px;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--fg-3);
+  font-family: var(--mono);
+}
+
+/* ── Tags ───────────────────────────────────────────────────────────── */
+
+.tags {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tags__label {
+  /* Wide enough for "Edge tags" on one line. */
+  width: 74px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-3);
+}
+
+.tags__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.pill--tag {
+  cursor: pointer;
+  user-select: none;
+}
+
+.pill--tag:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.pill--tag.is-missing {
+  border-style: dashed;
+  border-color: var(--miss);
+  color: var(--miss);
+  background: transparent;
+}
+
+/* ── Notes ──────────────────────────────────────────────────────────── */
+
+.notes {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.note {
+  padding: 7px 11px;
+  border-left: 3px solid transparent;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.note--warn {
+  background: var(--stale-bg);
+  border-left-color: var(--stale);
+  color: var(--fg);
+}
+
+.note--info {
+  background: var(--surface-2);
+  border-left-color: var(--border-strong);
+  color: var(--fg-2);
+}
+
+
+.note code {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 0 3px;
+}
+
+/* ==========================================================================
+   Separator
+   ========================================================================== */
+
+.separator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-3);
+  animation: separatorFadeIn 0.3s ease-out;
+}
+
+.separator::before,
+.separator::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.separator-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+@keyframes separatorFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ==========================================================================
+   Banners
+   ========================================================================== */
+
+.deactivated-banner,
+.debug-notice {
+  padding: 14px;
   max-width: 1000px;
   margin: 0 auto;
 }
 
-.deactivated-icon {
-  font-size: 1.25rem;
-}
-
-.deactivated-text {
-  color: var(--gray-600);
-  font-weight: 500;
-}
-
-.activate-btn {
-  background: var(--primary-color);
-  color: white;
-  border: none;
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.activate-btn:hover {
-  background: var(--primary-dark);
-}
-
-.debug-notice {
-  background: var(--warning-light);
-  border-bottom: 1px solid var(--warning-color);
-  padding: 0.75rem 1rem;
-}
-
+.deactivated-content,
 .debug-notice-content {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  max-width: 1000px;
-  margin: 0 auto;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: 2px;
+  font-size: 12px;
 }
 
-.debug-notice-icon {
-  font-size: 1rem;
-}
+.deactivated-content { border-left-color: var(--border-strong); }
+.deactivated-banner.is-edge .deactivated-content { border-left-color: var(--accent); }
+.debug-notice-content { border-left-color: var(--stale); background: var(--stale-bg); }
 
+.deactivated-text,
 .debug-notice-text {
   flex: 1;
-  color: var(--gray-700);
-  font-size: 0.875rem;
+  color: var(--fg-2);
+}
+
+.deactivated-text strong,
+.debug-notice-text strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.activate-btn {
+  font: inherit;
+  font-size: 12px;
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 2px;
+  background: var(--surface);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.activate-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .dismiss-btn {
   background: transparent;
   border: none;
-  color: var(--gray-500);
-  font-size: 1.25rem;
-  cursor: pointer;
-  padding: 0 0.5rem;
+  color: var(--fg-3);
+  font-size: 18px;
   line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
 }
 
 .dismiss-btn:hover {
-  color: var(--gray-700);
-}
-
-/* ==========================================================================
-   Dark Mode
-   ========================================================================== */
-
-@media (prefers-color-scheme: dark) {
-  body {
-    background-color: var(--gray-900);
-    color: var(--gray-100);
-  }
-
-  .entry-card {
-    background: var(--gray-800);
-    border-color: var(--gray-700) !important;
-  }
-
-  .entry-card:hover {
-    border-color: var(--gray-700) !important;
-  }
-
-  .entry-card.compact .info-row:not(:last-child),
-  .entry-card.compact:hover .info-row:not(:last-child) {
-    border-color: var(--gray-700) !important;
-  }
-
-  .entry-card.highlight {
-    background: rgba(56, 88, 233, 0.1);
-  }
-
-  /* Status border colors in dark mode - when highlighted or hovered */
-  .entry-card[data-status="hit"].highlight,
-  .entry-card[data-status="hit"]:hover {
-    border-left-color: var(--success-color);
-  }
-  .entry-card[data-status="miss"].highlight,
-  .entry-card[data-status="miss"]:hover {
-    border-left-color: var(--error-color);
-  }
-  .entry-card[data-status="bypass"].highlight,
-  .entry-card[data-status="bypass"]:hover {
-    border-left-color: var(--info-color);
-  }
-  .entry-card[data-status="stale"].highlight,
-  .entry-card[data-status="stale"]:hover {
-    border-left-color: var(--warning-color);
-  }
-
-  .card-url {
-    color: var(--gray-100);
-  }
-
-  .http-status {
-    background-color: var(--gray-700);
-    color: var(--gray-300);
-  }
-
-  .info-row {
-    border-bottom-color: var(--gray-700);
-  }
-
-  .info-label {
-    color: var(--gray-400);
-  }
-
-  .info-value {
-    color: var(--gray-100);
-  }
-
-  .pill {
-    background-color: var(--primary-dark);
-    color: var(--gray-100);
-  }
-
-  .pill:hover {
-    background-color: var(--primary-color);
-  }
-
-  .transition-badge {
-    background-color: var(--gray-700);
-    color: var(--gray-400);
-  }
-
-  .expired-badge {
-    background-color: rgba(239, 68, 68, 0.2);
-    color: var(--error-color);
-  }
-
-  .separator hr {
-    background-color: var(--gray-700);
-  }
-
-  .separator-label {
-    background-color: var(--gray-900);
-    color: var(--gray-400);
-  }
-
-  .waiting {
-    color: var(--gray-400);
-  }
-
-  .deactivated-banner {
-    background: var(--gray-800);
-    border-bottom-color: var(--gray-700);
-  }
-
-  .deactivated-text {
-    color: var(--gray-300);
-  }
-
-  .debug-notice {
-    background: rgba(245, 158, 11, 0.15);
-    border-bottom-color: var(--warning-color);
-  }
-
-  .debug-notice-text {
-    color: var(--gray-200);
-  }
-
-  .dismiss-btn {
-    color: var(--gray-400);
-  }
-
-  .dismiss-btn:hover {
-    color: var(--gray-200);
-  }
-
-  .savings-comparison {
-    color: var(--gray-400);
-  }
+  color: var(--fg);
 }
