@@ -513,6 +513,7 @@ document.addEventListener("DOMContentLoaded", () => {
     "Edge saved": "How much faster the edge answered than the origin did for this URL.",
     "Expires": "When the cached entry expires and MilliCache regenerates it.",
     "Edge expires": "When the edge copy stops being fresh, so the next request makes the edge refetch it.",
+    "Entry expires": "When the cached entry the edge is serving expires at the origin. Read from the entry's own headers, so it describes this copy; the origin may have regenerated since.",
     "At edge": "How long the edge has held this copy. The response set no lifetime, so the zone governs when it expires.",
     "Written": "When the page you received was generated at the origin.",
     "Key": "The key MilliCache stored this entry under.",
@@ -550,11 +551,12 @@ document.addEventListener("DOMContentLoaded", () => {
    * A metric cell holding a live countdown.
    *
    * @param {object} expiry Resolved expiry from the analyzer.
-   * @param {HTMLElement} card Card to mark expired when it lapses.
+   * @param {HTMLElement|null} card Card to mark expired when it lapses.
+   * @param {string} label Tile label.
    * @returns {HTMLElement}
    */
-  function createExpiresMetric(expiry, card) {
-    const { cell, valueEl } = createMetric("Expires", "is-mono");
+  function createExpiresMetric(expiry, card, label = "Expires") {
+    const { cell, valueEl } = createMetric(label, "is-mono");
 
     if (expiry.targetTime === undefined || expiry.targetTime === null) {
       valueEl.textContent = expiry.text;
@@ -649,6 +651,16 @@ document.addEventListener("DOMContentLoaded", () => {
         createEdgeExpiresMetric(observation.edge, card),
         createEdgeAgeMetric(observation.edge)
       ].forEach(cell => cell && cells.push(cell));
+
+      // When debug mode is on, the entry's own lifetime can be anchored to an
+      // absolute instant even from a replayed copy, which answers how stale the
+      // served page is when the response sets no edge lifetime of its own. It
+      // describes the copy the edge holds; the origin may have regenerated
+      // since, so it does not drive the headline.
+      const expiry = observation.expiry;
+      if (expiry && expiry.targetTime && !expiry.approximate) {
+        cells.push(createExpiresMetric(expiry, null, "Entry expires"));
+      }
 
       if (origin.time) {
         cells.push(createWrittenMetric(origin.time));
