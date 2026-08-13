@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.4.2](https://github.com/MilliPress/millicache-browser-ext/compare/v1.4.1...v1.4.2) (2026-08-13)
+
+
+### Features
+
+* show the entry's own expiry on an edge-served card ([ff1cdf3](https://github.com/MilliPress/millicache-browser-ext/commit/ff1cdf3815f0aa94b3c0dc38ec96a569c8d5213a))
+
+
+### Bug Fixes
+
+* stop reporting bypassed responses as misconfigured ([487fa93](https://github.com/MilliPress/millicache-browser-ext/commit/487fa939543176079b4be2c5dc9fc75b3541f208))
+
+
+### Miscellaneous Chores
+
+* release as 1.4.2 ([f5ca41c](https://github.com/MilliPress/millicache-browser-ext/commit/f5ca41c4c4c3c767b745261fd2389341860db7d9))
+
 ## [1.4.1](https://github.com/MilliPress/millicache-browser-ext/compare/v1.4.0...v1.4.1) (2026-08-12)
 
 
