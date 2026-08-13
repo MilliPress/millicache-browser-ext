@@ -42,7 +42,7 @@ const CF_FROM_ORIGIN = new Set(["miss", "expired", "dynamic", "bypass", "none", 
 const CF_FROM_EDGE = new Set(["hit", "stale", "updating", "revalidated"]);
 
 const BUNNY_FROM_ORIGIN = new Set(["miss", "expired", "bypass"]);
-const BUNNY_FROM_EDGE = new Set(["hit", "stale"]);
+const BUNNY_FROM_EDGE = new Set(["hit", "stale", "updating"]);
 
 const GENERIC_FROM_ORIGIN = new Set(["miss", "bypass", "dynamic", "expired"]);
 const GENERIC_FROM_EDGE = new Set(["hit", "stale"]);

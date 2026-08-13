@@ -173,3 +173,26 @@ test("only compares flags against edge tags when the origin wrote both", () => {
       .some(note => /Flags missing from the edge tag: 2:post:123/.test(note.text))
   );
 });
+
+test("does not report a bypassed response as misconfigured", () => {
+  // Nobody intends the edge to store a bypass, so a missing tag and a missing
+  // lifetime are its expected shape rather than faults.
+  const bypassed = edgeFrom({ "cdn-cache": "BYPASS", "server": "BunnyCDN-DE1-1" });
+  const notes = buildDiagnostics({ reason: "", flags: [], statusValue: "bypass" }, bypassed, true);
+
+  assert.equal(notes.some(n => /untagged/.test(n.text)), false);
+  assert.equal(notes.some(n => /pull zone's own expiry/.test(n.text)), false);
+});
+
+test("still reports a storable response missing its tag and lifetime", () => {
+  const storable = edgeFrom({ "cdn-cache": "MISS", "server": "BunnyCDN-DE1-1" });
+  const notes = buildDiagnostics({ reason: "", flags: [], statusValue: "miss" }, storable, true);
+
+  assert.ok(notes.some(n => /untagged/.test(n.text)));
+  assert.ok(notes.some(n => /pull zone's own expiry/.test(n.text)));
+});
+
+test("treats bunny.net UPDATING as edge-served", () => {
+  // Serving the stored copy while it refreshes in the background.
+  assert.equal(edgeFrom({ "cdn-cache": "UPDATING", "server": "BunnyCDN-DE1-1" }).originFresh, false);
+});

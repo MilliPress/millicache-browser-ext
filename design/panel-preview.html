@@ -162,6 +162,31 @@ const SCENARIOS = [
     "cdn-cache": "HIT"
   }, 18),
 
+  // bunny.net bypass: nothing is meant to be stored, so no notices.
+  () => entry("https://example.com/cart/", 200, {
+    "server": "BunnyCDN-DE1-1331",
+    "cdn-cache": "BYPASS",
+    "cache-control": "public, max-age=0",
+    "x-millicache-status": "bypass",
+    "x-millicache-reason": "Cart cookie present"
+  }, 340),
+
+  // A 20s-TTL entry replayed by the edge, with debug headers: the entry's own
+  // lifetime is anchored from the fill timestamp even with no s-maxage.
+  () => entry("https://example.com/docs/cache-flags/", 200, {
+    "server": "BunnyCDN-DE1-1331",
+    "cdn-cache": "STALE",
+    "cache-control": "public, max-age=0",
+    "cdn-tag": "~docs~route:docs:show~url:5645313a~",
+    "cdn-cachedat": new Date(Date.now() - 95000).toISOString().replace(/(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2}:\d{2}).*/, "$2/$3/$1 $4"),
+    "age": "95",
+    "x-millicache-status": "hit",
+    "x-millicache-key": "5645313ad64160400fb4d5fa85b7d238",
+    "x-millicache-time": new Date(Date.now() - 100000).toUTCString(),
+    "x-millicache-flags": "docs route:docs:show url:5645313a",
+    "x-millicache-expires": "0d 00h 00m 15s"
+  }, 16),
+
   // A plain origin miss, so the panel has an origin baseline to compare against.
   () => entry(HOME, 200, {
     "X-MilliCache-Status": "miss",

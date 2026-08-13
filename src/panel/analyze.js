@@ -238,6 +238,12 @@ function compare(baseline, current) {
 export function buildDiagnostics(origin, edge, isMainDocument) {
   const notes = [];
 
+  // A response nobody intends the edge to store. Missing tags and lifetimes are
+  // the expected shape of that, not something to report.
+  const notStored = edge.isPrivate ||
+    origin.statusValue === "bypass" ||
+    edge.status === "bypass";
+
   if (edge.isPrivate) {
     notes.push({
       level: "info",
@@ -262,7 +268,7 @@ export function buildDiagnostics(origin, edge, isMainDocument) {
 
   // Not a fault: MilliCache Pro can be told to emit no TTL header and leave
   // expiry to the zone (the millicache_edge_ttl filter returning 0).
-  if (isMainDocument && !edge.isPrivate && edge.sMaxAge === null) {
+  if (isMainDocument && !notStored && edge.sMaxAge === null) {
     notes.push({
       level: "info",
       text: "No s-maxage on the response, so the pull zone's own expiry setting decides how long the edge keeps this page."
@@ -276,7 +282,7 @@ export function buildDiagnostics(origin, edge, isMainDocument) {
     });
   }
 
-  if (!edge.isPrivate && !edge.tags.length) {
+  if (!notStored && !edge.tags.length) {
     if (edge.providerId === "bunny") {
       notes.push({
         level: "warn",
