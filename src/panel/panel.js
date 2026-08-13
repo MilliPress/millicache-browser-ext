@@ -513,7 +513,7 @@ document.addEventListener("DOMContentLoaded", () => {
     "Edge saved": "How much faster the edge answered than the origin did for this URL.",
     "Expires": "When the cached entry expires and MilliCache regenerates it.",
     "Edge expires": "When the edge copy stops being fresh, so the next request makes the edge refetch it.",
-    "Entry expires": "When the cached entry the edge is serving expires at the origin. Read from the entry's own headers, so it describes this copy; the origin may have regenerated since.",
+    "Origin expires": "When MilliCache's own entry expires. The edge stores its copy when it first requests the page, so an edge copy outlives this by however long the entry had already been sitting at the origin.",
     "At edge": "How long the edge has held this copy. The response set no lifetime, so the zone governs when it expires.",
     "Written": "When the page you received was generated at the origin.",
     "Key": "The key MilliCache stored this entry under.",
@@ -659,7 +659,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // since, so it does not drive the headline.
       const expiry = observation.expiry;
       if (expiry && expiry.targetTime && !expiry.approximate) {
-        cells.push(createExpiresMetric(expiry, null, "Entry expires"));
+        cells.push(createExpiresMetric(expiry, null, "Origin expires"));
       }
 
       if (origin.time) {
@@ -670,7 +670,12 @@ document.addEventListener("DOMContentLoaded", () => {
     // Entry facts are live only when the origin answered.
     if (servedBy === "origin") {
       if (observation.expiry) {
-        cells.push(createExpiresMetric(observation.expiry, card));
+        // Named for its layer wherever there are two of them to tell apart.
+        cells.push(createExpiresMetric(
+          observation.expiry,
+          card,
+          observation.edge.detected ? "Origin expires" : "Expires"
+        ));
       }
 
       if (origin.time) {
