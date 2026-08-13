@@ -3,6 +3,10 @@
     "millicache@headers.dev": {
       "updates": [
         {
+          "version": "1.4.2",
+          "update_link": "https://github.com/MilliPress/millicache-browser-ext/releases/download/v1.4.2/millicache-firefox-1.4.2.xpi"
+        },
+        {
           "version": "1.4.1",
           "update_link": "https://github.com/MilliPress/millicache-browser-ext/releases/download/v1.4.1/millicache-firefox-1.4.1.xpi"
         },
