@@ -9,10 +9,10 @@
 /**
  * Build a request entry.
  *
- * @param {object} options url, status, ttfb and a headers object.
+ * @param {object} options url, status, ttfb, response headers and request headers.
  * @returns {object} DevTools HAR entry.
  */
-export function makeRequest({ url = "https://example.com/", status = 200, ttfb = 100, headers = {} } = {}) {
+export function makeRequest({ url = "https://example.com/", status = 200, ttfb = 100, headers = {}, requestHeaders = {} } = {}) {
   const list = [];
 
   Object.entries(headers).forEach(([name, value]) => {
@@ -23,7 +23,10 @@ export function makeRequest({ url = "https://example.com/", status = 200, ttfb =
   });
 
   return {
-    request: { url },
+    request: {
+      url,
+      headers: Object.entries(requestHeaders).map(([name, value]) => ({ name, value: String(value) }))
+    },
     response: { status, headers: list },
     timings: { wait: ttfb }
   };

@@ -97,13 +97,14 @@ export const CLOUDFLARE_FRESH = {
 };
 
 /**
- * bunny.net edge HIT on a zone whose own expiry setting governs, from
+ * bunny.net edge HIT with no visible s-maxage, from
  * https://www.meggle-group.com/qualitaet on 2026-08-12.
  *
- * No s-maxage: MilliCache is leaving edge expiry to the zone. The `max-age=0`
- * alongside is the site's browser directive, and the edge plainly ignores it,
- * serving a copy it had held for over an hour. Treating max-age as the edge
- * lifetime made the panel call this expired while the edge called it a HIT.
+ * The `public, max-age=0` is the pull zone's Browser Cache Expiration Time
+ * replacing the origin's Cache-Control on the way out; MilliCache's s-maxage is
+ * very likely still there and honoured, as on the sibling zone that shows it.
+ * Treating max-age as the edge lifetime made the panel call this expired while
+ * the edge called it a HIT, an hour into serving the copy.
  */
 export const BUNNY_ZONE_GOVERNED = {
   headers: {
@@ -136,7 +137,10 @@ export const BUNNY_ZONE_GOVERNED = {
  */
 export function toRequest(fixture, url = "https://www.new7wonders.com/", ttfb = 21) {
   return {
-    request: { url },
+    request: {
+      url,
+      headers: [{ name: "Sec-Fetch-Dest", value: "document" }]
+    },
     response: {
       status: 200,
       headers: Object.entries(fixture.headers).map(([name, value]) => ({ name, value }))

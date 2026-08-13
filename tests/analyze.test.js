@@ -97,3 +97,32 @@ test("reads origin headers case-insensitively", () => {
   assert.equal(origin.statusValue, "hit");
   assert.equal(origin.gzip, null);
 });
+
+test("identifies the document from Sec-Fetch-Dest, not from navigation order", () => {
+  // A navigation to a new URL: the document's request finishes while
+  // onNavigated still reports the previous page. The URL comparison alone said
+  // "not the document", which gated bypass cards and the diagnostics.
+  const stale = { lastNavigatedUrl: "https://example.com/previous" };
+
+  const navigated = makeRequest({
+    url: "https://example.com/new",
+    headers: { "X-MilliCache-Status": "bypass" },
+    requestHeaders: { "Sec-Fetch-Dest": "document" }
+  });
+  assert.equal(analyze(navigated, createState(), stale).verdict, "render");
+
+  // A subframe reports "iframe" and is not the page.
+  const framed = makeRequest({
+    url: "https://example.com/widget",
+    headers: { "X-MilliCache-Status": "bypass" },
+    requestHeaders: { "Sec-Fetch-Dest": "iframe" }
+  });
+  assert.equal(analyze(framed, createState(), stale).isMainDocument, false);
+
+  // Without the header, fall back to the previous behaviour.
+  const legacy = makeRequest({
+    url: "https://example.com/previous",
+    headers: { "X-MilliCache-Status": "hit" }
+  });
+  assert.equal(analyze(legacy, createState(), stale).isMainDocument, true);
+});

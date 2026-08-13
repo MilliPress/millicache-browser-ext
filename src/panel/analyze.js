@@ -320,6 +320,31 @@ export function buildDiagnostics(origin, edge, isMainDocument) {
 }
 
 /**
+ * Whether this request is the page itself rather than something it pulled in.
+ *
+ * The browser says so directly: `Sec-Fetch-Dest: document` marks a top-level
+ * navigation, and a subframe reports `iframe` instead. Comparing the URL against
+ * the last navigation is only a fallback, because it depends on ordering that
+ * does not hold: on a navigation to a new URL the document's request finishes
+ * while `onNavigated` still reports the previous page, so the real document was
+ * judged not to be one. It matched only on a reload, where the URL was already
+ * recorded.
+ *
+ * @param {object} request DevTools HAR entry.
+ * @param {string} url Request URL.
+ * @param {string|null} lastNavigatedUrl Last URL reported by onNavigated.
+ * @returns {boolean}
+ */
+export function isDocumentRequest(request, url, lastNavigatedUrl) {
+  const dest = (request.request.headers || [])
+    .find(header => String(header.name || "").toLowerCase() === "sec-fetch-dest");
+
+  if (dest) return String(dest.value || "").trim().toLowerCase() === "document";
+
+  return Boolean(lastNavigatedUrl) && url === lastNavigatedUrl;
+}
+
+/**
  * Analyze one finished request.
  *
  * @param {object} request DevTools HAR entry.
@@ -339,7 +364,7 @@ export function analyze(request, state, context) {
   const edge = detectEdge(index);
   const origin = readOriginHeaders(index);
 
-  const isMainDocument = Boolean(context.lastNavigatedUrl) && url === context.lastNavigatedUrl;
+  const isMainDocument = isDocumentRequest(request, url, context.lastNavigatedUrl);
 
   const base = {
     url,
