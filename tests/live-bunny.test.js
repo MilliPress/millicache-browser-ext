@@ -95,5 +95,40 @@ test("does not call an edge HIT expired when the zone governs expiry", () => {
   // contradict the edge by flipping its headline to EXPIRED.
   const notes = buildDiagnostics({ reason: "", flags: [] }, observed, true);
   assert.equal(notes.some(n => /past its s-maxage/.test(n.text)), false);
-  assert.ok(notes.some(n => n.level === "info" && /pull zone's own expiry/.test(n.text)));
+
+  // This response carries a CDN-Tag too, so it is the same rewritten-header
+  // shape as millipress.com rather than a zone left to govern on its own.
+  assert.ok(notes.some(n => n.level === "info" && /replaces Cache-Control/.test(n.text)));
+});
+
+test("does not blame MilliCache when bunny.net rewrites Cache-Control", () => {
+  // millipress.com goes stale at exactly MilliCache's 20s TTL, so the zone is
+  // honouring an s-maxage the browser never sees: the pull zone's Browser Cache
+  // Expiration Time replaced Cache-Control with "public, max-age=0" on the way
+  // out. The same plugin emits a visible s-maxage on another bunny zone.
+  const rewritten = detectEdge(createHeaderIndex([
+    { name: "server", value: "BunnyCDN-DE1-1331" },
+    { name: "cdn-cache", value: "STALE" },
+    { name: "cache-control", value: "public, max-age=0" },
+    { name: "cdn-tag", value: "~docs~route:docs:show~" }
+  ]));
+
+  const note = buildDiagnostics({ reason: "", flags: [] }, rewritten, true)
+    .find(n => /s-maxage/.test(n.text));
+
+  assert.ok(/replaces Cache-Control/.test(note.text));
+  assert.equal(/pull zone's own expiry setting decides/.test(note.text), false);
+});
+
+test("still says the zone governs when no tag suggests otherwise", () => {
+  const untagged = detectEdge(createHeaderIndex([
+    { name: "server", value: "BunnyCDN-DE1-1331" },
+    { name: "cdn-cache", value: "HIT" },
+    { name: "cache-control", value: "public, max-age=0" }
+  ]));
+
+  const note = buildDiagnostics({ reason: "", flags: [] }, untagged, true)
+    .find(n => /s-maxage/.test(n.text));
+
+  assert.ok(/pull zone's own expiry setting decides/.test(note.text));
 });

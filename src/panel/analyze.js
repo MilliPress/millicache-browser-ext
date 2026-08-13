@@ -266,12 +266,20 @@ export function buildDiagnostics(origin, edge, isMainDocument) {
     });
   }
 
-  // Not a fault: MilliCache Pro can be told to emit no TTL header and leave
-  // expiry to the zone (the millicache_edge_ttl filter returning 0).
+  // Absent s-maxage does not mean the origin sent none. bunny.net replaces the
+  // client-facing Cache-Control when a pull zone sets Browser Cache Expiration
+  // Time, so a zone can be honouring an s-maxage the browser never sees. Its own
+  // tag header arriving is the tell: the Tagger emits both together, so a tag
+  // without a lifetime points at the zone rewriting the header rather than at
+  // MilliCache omitting it.
   if (isMainDocument && !notStored && edge.sMaxAge === null) {
+    const rewritten = edge.providerId === "bunny" && edge.tags.length > 0;
+
     notes.push({
       level: "info",
-      text: "No s-maxage on the response, so the pull zone's own expiry setting decides how long the edge keeps this page."
+      text: rewritten
+        ? "No s-maxage is visible, but bunny.net replaces Cache-Control for the browser when the pull zone sets a Browser Cache Expiration Time. MilliCache may still be setting one that the edge honours."
+        : "No s-maxage on the response, so the pull zone's own expiry setting decides how long the edge keeps this page."
     });
   }
 
