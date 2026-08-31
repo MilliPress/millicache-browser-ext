@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.4.3](https://github.com/MilliPress/millicache-browser-ext/compare/v1.4.2...v1.4.3) (2026-08-13)
+
+
+### Bug Fixes
+
+* identify the main document from Sec-Fetch-Dest ([62e61a7](https://github.com/MilliPress/millicache-browser-ext/commit/62e61a75ecfe9ae589fd1c0416f30b9e9eb23d0e))
+* name the origin entry's expiry for its layer ([b5f964e](https://github.com/MilliPress/millicache-browser-ext/commit/b5f964edae1220547c221ca78330ef7602b478ea))
+* stop blaming MilliCache when bunny.net rewrites Cache-Control ([49cf731](https://github.com/MilliPress/millicache-browser-ext/commit/49cf7310066199b8fdedfe1e5486a92f99053696))
+
 ## [1.4.2](https://github.com/MilliPress/millicache-browser-ext/compare/v1.4.1...v1.4.2) (2026-08-13)
 
 
